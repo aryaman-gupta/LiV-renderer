@@ -1,0 +1,6 @@
+*.vdi-*
+temp/*
+gradle/*
+build/*
+.idea/*
+.gradle/*
