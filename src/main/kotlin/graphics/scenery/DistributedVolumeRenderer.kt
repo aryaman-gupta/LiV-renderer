@@ -51,6 +51,7 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
     var rendererConfigured = false
 
     var imagePointer = 0L
+    var mpiPointer = 0L
 
     var volumesCreated = AtomicBoolean(false)
 
@@ -98,6 +99,7 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
     @Suppress("unused")
     fun updateVolume(volumeID: Int, buffer: ByteBuffer) {
         while(volumes[volumeID] == null) {
+            logger.info("Waiting for volume $volumeID to be created")
             Thread.sleep(50)
         }
         logger.info("Volume $volumeID has been updated")
@@ -163,9 +165,9 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
 //        renderer!!.recordMovie("Gray_scott.mp4")
 
 
-        thread {
-            manageDVR()
-        }
+//        thread {
+//            manageDVR()
+//        }
 
         thread {
             while (!volumesCreated.get()) {
