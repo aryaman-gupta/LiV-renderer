@@ -24,11 +24,16 @@ fun main() {
     val volumeDims = intArrayOf(256, 256, 256)
     instance.setVolumeDims(volumeDims)
 
+    val pixelToWorld = 3.84f/256f
+
+    instance.pixelToWorld = pixelToWorld
+
     // Add a volume
     val volumeID = 0
     val volumePosition = floatArrayOf(0.0f, 0.0f, 0.0f)
     val is16bit = false
     instance.addVolume(volumeID, volumeDims, volumePosition, is16bit)
+    instance.addVolume(1, volumeDims, floatArrayOf(256f, 256f, 256f), is16bit)
 
     // Create a buffer to update the volume
     val bufferSize = volumeDims[0] * volumeDims[1] * volumeDims[2]
@@ -39,6 +44,8 @@ fun main() {
 
     // Update the volume
     instance.updateVolume(volumeID, buffer)
+    instance.updateVolume(1, buffer)
+
 
     instance.rendererConfigured = true
 
