@@ -12,7 +12,7 @@ import org.lwjgl.system.MemoryUtil
 
 class VolumeManagerManager (var hub: Hub) {
 
-    val NUM_LAYERS = 1
+    val NUM_LAYERS = 2
 
     private lateinit var volumeManager: VolumeManager
     private var colorTexture: Texture? = null

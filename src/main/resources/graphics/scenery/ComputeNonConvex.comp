@@ -37,6 +37,12 @@ layout(push_constant) uniform currentEye_t {
     int eye;
 } currentEye;
 
+#define USE_PRINTF 1
+
+#if USE_PRINTF
+#extension GL_EXT_debug_printf : enable
+#endif
+
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(set = 2, binding = 0, rgba8) uniform image3D LayeredColors;
 layout(set = 3, binding = 0, r32f) uniform image3D LayeredDepths;
@@ -68,6 +74,8 @@ float adjustOpacity(float a, float modifiedStepLength) {
 uniform bool fixedStepSize;
 uniform float stepsPerVoxel;
 
+#define NUM_LAYERS 2
+
 // ---------------------
 // $insert{Convert}
 // $insert{SampleVolume}
@@ -75,6 +83,11 @@ uniform float stepsPerVoxel;
 
 void main()
 {
+    bool debug_pixel = false;
+    if(gl_GlobalInvocationID.xy == ivec2(640, 360)) {
+        debug_pixel = true;
+    }
+
     mat4 ipv = InverseViewMatrices[0] * InverseProjectionMatrix;
     // frag coord in NDC
     // TODO: Re-introduce dithering
@@ -102,6 +115,9 @@ void main()
     float tnear = 1, tfar = 0, tmax = getMaxDepth( depthUV );
     float n, f;
 
+    float domain_end_points[NUM_LAYERS];
+    int index = 0;
+
     // $repeat:{vis,localNear,localFar,intersectBoundingBox|
     bool vis = false;
     float localNear = 0.0f;
@@ -111,6 +127,8 @@ void main()
 
     if ( n < f )
     {
+        domain_end_points[index] = f;
+        index++;
         localNear = n;
         localFar = f;
         tnear = min( tnear, max( 0, n ) );
@@ -121,7 +139,35 @@ void main()
 
     // -------------------------------------------------------
 
-    float end_depth;
+    int num_domains = index;
+
+    for (int i = num_domains; i < NUM_LAYERS; i++) {
+        domain_end_points[i] = 100.f; // set to a large (infinite) value
+    }
+
+    // Sort the domain_end_points array
+    for (int i = 0; i < NUM_LAYERS - 1; i++) {
+        for (int j = 0; j < NUM_LAYERS - i - 1; j++) {
+            if (domain_end_points[j] > domain_end_points[j + 1]) {
+                float temp = domain_end_points[j];
+                domain_end_points[j] = domain_end_points[j + 1];
+                domain_end_points[j + 1] = temp;
+            }
+        }
+    }
+
+    index = 0;
+
+    #if USE_PRINTF
+    if(debug_pixel) {
+        debugPrintfEXT("Total domains: %d", num_domains);
+        debugPrintfEXT("Domain 0 ends: %f", domain_end_points[0]);
+        debugPrintfEXT("Domain 1 ends: %f", domain_end_points[1]);
+    }
+    #endif
+
+    vec4 colors[NUM_LAYERS];
+    float depths[NUM_LAYERS];
 
     if ( tnear < tfar )
     {
@@ -167,14 +213,44 @@ void main()
             } else {
                 step += nw + step * fwnw;
             }
+
+            if (step > domain_end_points[index] || i == numSteps - 1) {
+                //the step is larger than the current domain end point, or it is the last step, so we need to stop
+                #if USE_PRINTF
+                if(debug_pixel) {
+                    debugPrintfEXT("Step: %f is beyond domain boundary of %d", step, index);
+                    debugPrintfEXT("Storing color value: (%f, %f, %f, %f) and depth %f", v.rgba, step);
+                }
+                #endif
+
+                colors[index] = v;
+                depths[index] = step;
+                v = vec4(0);
+                index++;
+            }
         }
-        FragColor = v;
-        end_depth = step;
+
+        for (int i = num_domains; i < NUM_LAYERS; i++) {
+            colors[i] = vec4(0);
+            depths[i] = 0;
+        }
+
     } else {
-        FragColor = vec4(0, 0, 0, 0);
-        end_depth = 0;
+        for (int i = 0; i < NUM_LAYERS; i++) {
+            colors[i] = vec4(0);
+            depths[i] = 0;
+        }
     }
 
-    imageStore(LayeredColors, ivec3(0, gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), FragColor);
-    imageStore(LayeredDepths, ivec3(0, gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), vec4(end_depth));
+    for (int i = 0; i < NUM_LAYERS; i++) {
+
+        if(debug_pixel) {
+            debugPrintfEXT("Storing color value: (%f, %f, %f, %f) and depth %f", colors[i].rgba, depths[i]);
+            debugPrintfEXT("Storing to layer %d, width: %d, height: %d", i, gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+        }
+
+
+        imageStore(LayeredColors, ivec3(i, gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), colors[i]);
+        imageStore(LayeredDepths, ivec3(i, gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), vec4(depths[i]));
+    }
 }
