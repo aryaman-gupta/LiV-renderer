@@ -9,7 +9,7 @@ import kotlin.math.log
 
 fun main() {
     // Initialize the renderer
-    val instance = DistributedVolumeRenderer()
+    val instance = DistributedVolumeRenderer(1280, 720)
 
     thread {
         instance.main()

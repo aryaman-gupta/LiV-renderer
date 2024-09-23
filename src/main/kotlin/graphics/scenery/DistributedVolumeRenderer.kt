@@ -25,7 +25,7 @@ import kotlin.concurrent.thread
 /**
  *
  */
-class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", windowWidth = 1280, windowHeight = 720) {
+class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase("Distributed Volume Renderer", windowWidth = wWidth, windowHeight = wHeight) {
 
     var volumes: HashMap<Int, BufferedVolume?> = java.util.HashMap()
 
@@ -121,7 +121,7 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
         volumes[volumeID]?.goToLastTimepoint()
     }
 
-    val nonConvex = true
+    val nonConvex = false
 
     override fun init() {
         logger.info("setting renderer device id to: $nodeRank")
@@ -240,11 +240,11 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
             }
 
             val colorBuffer = colorTexture.contents!!
-            SystemHelpers.dumpToFile(colorBuffer, "color${volumeManagerManager.getOutputType()}.raw")
+            SystemHelpers.dumpToFile(colorBuffer, "color${volumeManagerManager.getOutputType()}_${commSize}_$rank.raw")
 
             depthTexture?.let {
                 val depthBuffer = depthTexture.contents!!
-                SystemHelpers.dumpToFile(depthBuffer, "depth${volumeManagerManager.getOutputType()}.raw")
+                SystemHelpers.dumpToFile(depthBuffer, "depth${volumeManagerManager.getOutputType()}_${commSize}_$rank.raw")
             }
 
 //        val colorTexture = volumes[0]?.volumeManager?.material()?.textures?.get("OutputRender")!!
@@ -290,7 +290,7 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
     companion object {
         @JvmStatic
         fun main(args: Array<String>) {
-            DistributedVolumeRenderer().main()
+            DistributedVolumeRenderer(1280, 720).main()
         }
     }
 }
