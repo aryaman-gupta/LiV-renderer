@@ -220,28 +220,32 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
             if (volumeManagerManager.getOutputType() == VolumeManagerManager.OutputType.REGULAR_IMAGE) {
                 renderer?.screenshot("screenshot$cnt.png")
                 cnt++
-            } else if (volumeManagerManager.getOutputType() == VolumeManagerManager.OutputType.LAYERED_IMAGE) {
-                val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
-                val depthTexture = volumeManagerManager.getDepthTextureOrNull()!!
+            }
 
-                var textureFetched = Texture().fetchTexture(colorTexture)
+            val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
+            val depthTexture = volumeManagerManager.getDepthTextureOrNull()
 
-                if (textureFetched < 0) {
-                    logger.error("Error fetching layered color texture. return value: $textureFetched")
-                }
+            var textureFetched = Texture().fetchTexture(colorTexture)
 
+            if (textureFetched < 0) {
+                logger.error("Error fetching layered color texture. return value: $textureFetched")
+            }
+
+            depthTexture?.let {
                 textureFetched = Texture().fetchTexture(depthTexture)
 
                 if (textureFetched < 0) {
                     logger.error("Error fetching layered depth texture. return value: $textureFetched")
                 }
-
-                val colorBuffer = colorTexture.contents!!
-                val depthBuffer = depthTexture.contents!!
-                SystemHelpers.dumpToFile(colorBuffer, "color$cnt.raw")
-                SystemHelpers.dumpToFile(depthBuffer, "depth$cnt.raw")
             }
 
+            val colorBuffer = colorTexture.contents!!
+            SystemHelpers.dumpToFile(colorBuffer, "color${volumeManagerManager.getOutputType()}.raw")
+
+            depthTexture?.let {
+                val depthBuffer = depthTexture.contents!!
+                SystemHelpers.dumpToFile(depthBuffer, "depth${volumeManagerManager.getOutputType()}.raw")
+            }
 
 //        val colorTexture = volumes[0]?.volumeManager?.material()?.textures?.get("OutputRender")!!
 //
