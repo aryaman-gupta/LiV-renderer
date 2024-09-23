@@ -8,6 +8,7 @@ import graphics.scenery.controls.TrackedStereoGlasses
 import graphics.scenery.textures.Texture
 import graphics.scenery.ui.SwingBridgeFrame
 import graphics.scenery.utils.Image
+import graphics.scenery.utils.SystemHelpers
 import graphics.scenery.utils.extensions.fetchTexture
 import graphics.scenery.volumes.*
 import net.imglib2.type.numeric.integer.UnsignedByteType
@@ -31,8 +32,6 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
     var hmd: TrackedStereoGlasses? = null
     val cam: Camera = DetachedHeadCamera(hmd)
 
-    lateinit var volumeManager: VolumeManager
-
     val plane = FullscreenObject()
 
     var volumeDims = Vector3f(0f)
@@ -55,7 +54,13 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
 
     var volumesCreated = AtomicBoolean(false)
 
-    private external fun compositeImages(subImage: ByteBuffer, myRank: Int, commSize: Int, camPos: FloatArray, imagePointer: Long)
+    private external fun compositeImages(
+        subImage: ByteBuffer,
+        myRank: Int,
+        commSize: Int,
+        camPos: FloatArray,
+        imagePointer: Long
+    )
 
     @Suppress("unused")
     fun setVolumeDims(dims: IntArray) {
@@ -67,11 +72,11 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
         logger.info("Trying to add the volume")
         logger.info("id: $volumeID, dims: ${dimensions[0]}, ${dimensions[1]}, ${dimensions[2]} pos: ${pos[0]}, ${pos[1]}, ${pos[2]}")
 
-        while(!volumeManagerInitialized.get()) {
+        while (!volumeManagerInitialized.get()) {
             Thread.sleep(50)
         }
 
-        val volume = if(is16bit) {
+        val volume = if (is16bit) {
             Volume.fromBuffer(emptyList(), dimensions[0], dimensions[1], dimensions[2], UnsignedShortType(), hub)
         } else {
             Volume.fromBuffer(emptyList(), dimensions[0], dimensions[1], dimensions[2], UnsignedByteType(), hub)
@@ -80,13 +85,22 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
 
         volume.origin = Origin.FrontBottomLeft
         volume.spatial().needsUpdate = true
-        volume.colormap = Colormap.get("hot")
+        volume.colormap = Colormap.get("rbdarker")
         volume.pixelToWorldRatio = pixelToWorld
 
-        val tf = TransferFunction.ramp()
+        val tf = TransferFunction()
+
+        with(tf) {
+            addControlPoint(0.0f, 0.95f)
+            addControlPoint(0.15f, 0.0f)
+            addControlPoint(0.45f, 0.0f)
+            addControlPoint(0.5f, 0.35f)
+            addControlPoint(0.55f, 0.0f)
+            addControlPoint(0.80f, 0.0f)
+            addControlPoint(1.0f, 0.378f)
+        }
 
         volume.name = "volume"
-        volume.colormap = Colormap.get("hot")
 
         volume.transferFunction = tf
 
@@ -98,7 +112,7 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
 
     @Suppress("unused")
     fun updateVolume(volumeID: Int, buffer: ByteBuffer) {
-        while(volumes[volumeID] == null) {
+        while (volumes[volumeID] == null) {
             logger.info("Waiting for volume $volumeID to be created")
             Thread.sleep(50)
         }
@@ -107,38 +121,41 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
         volumes[volumeID]?.goToLastTimepoint()
     }
 
+    val nonConvex = true
 
     override fun init() {
         logger.info("setting renderer device id to: $nodeRank")
-        System.setProperty("scenery.Renderer.DeviceId", nodeRank.toString())
+//        System.setProperty("scenery.Renderer.DeviceId", nodeRank.toString())
+        System.setProperty("scenery.Renderer.DeviceId", "1")
 
         renderer = hub.add(Renderer.createRenderer(hub, applicationName, scene, windowWidth, windowHeight))
 
-        volumeManager = VolumeManager(hub,
-            useCompute = true,
-            customSegments = hashMapOf(
-                SegmentType.FragmentShader to SegmentTemplate(
-                    this.javaClass,
-                    "ComputeVolume.comp",
-                    "intersectBoundingBox", "vis", "localNear", "localFar", "SampleVolume", "Convert", "Accumulate"),
-            ))
-        volumeManager.customTextures.add("OutputRender")
+        setVolumeDims(intArrayOf(1024, 1024, 795))
+        pixelToWorld = 3.84f / volumeDims.x
 
-        val outputBuffer = MemoryUtil.memCalloc(windowWidth*windowHeight*4)
-        val outputTexture = Texture.fromImage(Image(outputBuffer, windowWidth, windowHeight), usage = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture))
-        volumeManager.material().textures["OutputRender"] = outputTexture
+        val volumeManagerManager = VolumeManagerManager(hub)
 
-        hub.add(volumeManager)
+        if (!nonConvex) {
+            volumeManagerManager.instantiateVolumeManager(
+                VolumeManagerManager.OutputType.REGULAR_IMAGE,
+                windowWidth, windowHeight
+            )
 
-        scene.addChild(plane)
-        plane.material().textures["diffuse"] = volumeManager.material().textures["OutputRender"]!!
-
+            scene.addChild(plane)
+            plane.material().textures["diffuse"] = volumeManagerManager.getColorTextureOrNull()!!
+        } else {
+            volumeManagerManager.instantiateVolumeManager(
+                VolumeManagerManager.OutputType.LAYERED_IMAGE,
+                windowWidth, windowHeight
+            )
+        }
 
         volumeManagerInitialized.set(true)
 
+
         with(cam) {
-            spatial().position = Vector3f( 4.622E+0f, -9.060E-1f, -1.047E+0f) //V1 for kingsnake
-            spatial().rotation = Quaternionf( 5.288E-2, -9.096E-1, -1.222E-1,  3.936E-1)
+            spatial().position = Vector3f(-2.300E+0f, -6.402E+0f, 1.100E+0f) //V1 for Rayleigh_Taylor
+            spatial().rotation = Quaternionf(2.495E-1, -7.098E-1, 3.027E-1, -5.851E-1)
 
             perspectiveCamera(50.0f, windowWidth, windowHeight)
             cam.farPlaneDistance = 20.0f
@@ -150,13 +167,13 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
         }
 
         lights.mapIndexed { i, light ->
-            light.spatial().position = Vector3f(2.0f * i - 4.0f,  i - 1.0f, 0.0f)
+            light.spatial().position = Vector3f(2.0f * i - 4.0f, i - 1.0f, 0.0f)
             light.emissionColor = Vector3f(1.0f, 1.0f, 1.0f)
             light.intensity = 0.5f
             scene.addChild(light)
         }
 
-        while(!rendererConfigured) {
+        while (!rendererConfigured) {
             Thread.sleep(50)
         }
 
@@ -165,9 +182,9 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
 //        renderer!!.recordMovie("Gray_scott.mp4")
 
 
-//        thread {
-//            manageDVR()
-//        }
+        thread {
+            manageDVR(volumeManagerManager)
+        }
 
         thread {
             while (!volumesCreated.get()) {
@@ -180,46 +197,76 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
             tfUI.name = volumes[0]?.name ?: ""
             val swingUiNode = bridge.uiNode
             swingUiNode.spatial() {
-                position = Vector3f(2f,0f,0f)
+                position = Vector3f(2f, 0f, 0f)
             }
 
             scene.addChild(swingUiNode)
         }
     }
 
-    fun manageDVR() {
+    fun manageDVR(volumeManagerManager: VolumeManagerManager) {
 
-        while(renderer?.firstImageReady == false) {
+        while (renderer?.firstImageReady == false) {
             Thread.sleep(50)
         }
 
-        while(!rendererConfigured) {
+        while (!rendererConfigured) {
             Thread.sleep(50)
         }
+        var cnt = 0
+        while (renderer?.shouldClose == false) {
+            Thread.sleep(2000)
 
-        val colorTexture = volumes[0]?.volumeManager?.material()?.textures?.get("OutputRender")!!
+            if (volumeManagerManager.getOutputType() == VolumeManagerManager.OutputType.REGULAR_IMAGE) {
+                renderer?.screenshot("screenshot$cnt.png")
+                cnt++
+            } else if (volumeManagerManager.getOutputType() == VolumeManagerManager.OutputType.LAYERED_IMAGE) {
+                val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
+                val depthTexture = volumeManagerManager.getDepthTextureOrNull()!!
 
+                var textureFetched = Texture().fetchTexture(colorTexture)
 
-        (renderer as VulkanRenderer).runAfterRendering.add {
-            val textureFetched = Texture().fetchTexture(colorTexture)
+                if (textureFetched < 0) {
+                    logger.error("Error fetching layered color texture. return value: $textureFetched")
+                }
 
-            if(textureFetched < 0) {
-                logger.error("Error fetching DVR texture. return value: $textureFetched")
+                textureFetched = Texture().fetchTexture(depthTexture)
+
+                if (textureFetched < 0) {
+                    logger.error("Error fetching layered depth texture. return value: $textureFetched")
+                }
+
+                val colorBuffer = colorTexture.contents!!
+                val depthBuffer = depthTexture.contents!!
+                SystemHelpers.dumpToFile(colorBuffer, "color$cnt.raw")
+                SystemHelpers.dumpToFile(depthBuffer, "depth$cnt.raw")
             }
 
-            val imageBuffer = colorTexture.contents!!
 
-            val camPos = FloatArray(3)
-
-            camPos[0] = cam.spatial().position.x
-            camPos[1] = cam.spatial().position.y
-            camPos[2] = cam.spatial().position.z
-
-            if (imageBuffer.remaining() == windowWidth * windowHeight * 4) {
-                compositeImages(imageBuffer, rank, commSize, camPos, imagePointer) //this function will call a java fn that will place the image on the screen
-            } else {
-                logger.error("Not compositing because image size: ${imageBuffer.remaining()} expected: ${windowHeight * windowWidth * 4}")
-            }
+//        val colorTexture = volumes[0]?.volumeManager?.material()?.textures?.get("OutputRender")!!
+//
+//
+//        (renderer as VulkanRenderer).runAfterRendering.add {
+//            val textureFetched = Texture().fetchTexture(colorTexture)
+//
+//            if(textureFetched < 0) {
+//                logger.error("Error fetching DVR texture. return value: $textureFetched")
+//            }
+//
+//            val imageBuffer = colorTexture.contents!!
+//
+//            val camPos = FloatArray(3)
+//
+//            camPos[0] = cam.spatial().position.x
+//            camPos[1] = cam.spatial().position.y
+//            camPos[2] = cam.spatial().position.z
+//
+//            if (imageBuffer.remaining() == windowWidth * windowHeight * 4) {
+//                compositeImages(imageBuffer, rank, commSize, camPos, imagePointer) //this function will call a java fn that will place the image on the screen
+//            } else {
+//                logger.error("Not compositing because image size: ${imageBuffer.remaining()} expected: ${windowHeight * windowWidth * 4}")
+//            }
+//        }
         }
     }
 
@@ -227,7 +274,8 @@ class DistributedVolumeRenderer : SceneryBase("Distributed Volume Renderer", win
     fun displayComposited(compositedImage: ByteBuffer) {
 
         val bufferLE = compositedImage.order(ByteOrder.LITTLE_ENDIAN)
-        plane.material().textures["diffuse"] = Texture(Vector3i(windowWidth, windowHeight, 1), 4, contents = bufferLE, mipmap = true)
+        plane.material().textures["diffuse"] =
+            Texture(Vector3i(windowWidth, windowHeight, 1), 4, contents = bufferLE, mipmap = true)
     }
 
     @Suppress("unused")
