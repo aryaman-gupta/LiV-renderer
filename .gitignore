@@ -4,3 +4,6 @@ gradle/*
 build/*
 .idea/*
 .gradle/*
+*.png
+*.log
+*.raw
