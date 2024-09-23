@@ -73,7 +73,6 @@ uniform float stepsPerVoxel;
 
 void main()
 {
-    return;
     mat4 ipv = InverseViewMatrices[0] * InverseProjectionMatrix;
     // frag coord in NDC
     // TODO: Re-introduce dithering
@@ -164,6 +163,7 @@ void main()
                 step += nw + step * fwnw;
             }
         }
+        v.xyz = pow(v.xyz, vec3(1/2.2));
         FragColor = v;
     } else {
         FragColor = vec4(0, 0, 0, 0);
