@@ -81,9 +81,9 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
         } else {
             Volume.fromBuffer(emptyList(), dimensions[0], dimensions[1], dimensions[2], UnsignedByteType(), hub)
         }
+        volume.origin = Origin.FrontBottomLeft
         volume.spatial().position = Vector3f(pos[0], pos[1], pos[2])
 
-        volume.origin = Origin.FrontBottomLeft
         volume.spatial().needsUpdate = true
         volume.colormap = Colormap.get("rbdarker")
         volume.pixelToWorldRatio = pixelToWorld
@@ -91,13 +91,9 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
         val tf = TransferFunction()
 
         with(tf) {
-            addControlPoint(0.0f, 0.95f)
-            addControlPoint(0.15f, 0.0f)
-            addControlPoint(0.45f, 0.0f)
-            addControlPoint(0.5f, 0.35f)
-            addControlPoint(0.55f, 0.0f)
-            addControlPoint(0.80f, 0.0f)
-            addControlPoint(1.0f, 0.378f)
+            addControlPoint(0.18f, 0.28f)
+            addControlPoint(0.6f, 0.3f)
+            addControlPoint(0.88f, 0.7f)
         }
 
         volume.name = "volume"
@@ -218,7 +214,7 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
             Thread.sleep(2000)
 
             if (volumeManagerManager.getOutputType() == VolumeManagerManager.OutputType.REGULAR_IMAGE) {
-                renderer?.screenshot("screenshot$cnt.png")
+                renderer?.screenshot("screenshot_${commSize}_$rank.png")
                 cnt++
             }
 
