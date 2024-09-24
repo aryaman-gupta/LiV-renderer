@@ -223,6 +223,8 @@ void main()
                 }
                 #endif
 
+//                v.xyz = pow(v.xyz, vec3(1/2.2));
+                v.rgb *= v.a;
                 colors[index] = v;
                 depths[index] = step;
                 v = vec4(0);

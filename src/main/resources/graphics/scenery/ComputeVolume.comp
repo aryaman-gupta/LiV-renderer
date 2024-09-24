@@ -163,7 +163,8 @@ void main()
                 step += nw + step * fwnw;
             }
         }
-        v.xyz = pow(v.xyz, vec3(1/2.2));
+//        v.xyz = pow(v.xyz, vec3(1/2.2));
+        v.rgb *= v.a;
         FragColor = v;
     } else {
         FragColor = vec4(0, 0, 0, 0);
