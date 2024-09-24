@@ -21,7 +21,7 @@ fun main() {
     }
 
     // Set the volume dimensions
-    val volumeDims = intArrayOf(256, 256, 128)
+    val volumeDims = intArrayOf(128, 128, 256)
     instance.setVolumeDims(volumeDims)
 
     val pixelToWorld = 3.84f/256f
@@ -29,22 +29,40 @@ fun main() {
     instance.pixelToWorld = pixelToWorld
 
     // Add a volume
-    val volumeID = 0
     val volumePosition = floatArrayOf(0.0f, 0.0f, 0.0f)
     val is16bit = false
-    instance.addVolume(volumeID, volumeDims, volumePosition, is16bit)
-    instance.addVolume(1, volumeDims, floatArrayOf(0f, 0f, 128f * pixelToWorld), is16bit)
+    instance.addVolume(0, volumeDims, volumePosition, is16bit)
+    instance.addVolume(1, volumeDims, floatArrayOf(128f * pixelToWorld, 0f, 0f), is16bit)
+    instance.addVolume(2, volumeDims, floatArrayOf(0f, -128f * pixelToWorld, 0f), is16bit)
+    instance.addVolume(3, volumeDims, floatArrayOf(128f * pixelToWorld, -128f * pixelToWorld, 0f), is16bit)
 
     // Create a buffer to update the volume
     val bufferSize = volumeDims[0] * volumeDims[1] * volumeDims[2]
     val buffer = ByteBuffer.allocateDirect(bufferSize)
     for (i in 0 until bufferSize) {
-        buffer.put(i, (i % 256).toByte())
+        buffer.put(i, (128).toByte())
+    }
+
+    val buffer2 = ByteBuffer.allocateDirect(bufferSize)
+    for (i in 0 until bufferSize) {
+        buffer2.put(i, (255).toByte())
+    }
+
+    val buffer3 = ByteBuffer.allocateDirect(bufferSize)
+    for (i in 0 until bufferSize) {
+        buffer3.put(i, (0).toByte())
+    }
+
+    val buffer4 = ByteBuffer.allocateDirect(bufferSize)
+    for (i in 0 until bufferSize) {
+        buffer4.put(i, (128).toByte())
     }
 
     // Update the volume
-    instance.updateVolume(volumeID, buffer)
-    instance.updateVolume(1, buffer)
+    instance.updateVolume(0, buffer)
+    instance.updateVolume(1, buffer2)
+    instance.updateVolume(2, buffer3)
+    instance.updateVolume(3, buffer4)
 
 
     instance.rendererConfigured = true
