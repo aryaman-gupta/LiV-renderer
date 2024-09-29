@@ -93,7 +93,8 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
         with(tf) {
             addControlPoint(0.18f, 0.28f)
             addControlPoint(0.6f, 0.3f)
-            addControlPoint(0.88f, 0.7f)
+            addControlPoint(0.88f, 0.4f)
+            addControlPoint(1f, 0.5f)
         }
 
         volume.name = "volume"
