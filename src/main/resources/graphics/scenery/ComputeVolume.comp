@@ -37,6 +37,12 @@ layout(push_constant) uniform currentEye_t {
     int eye;
 } currentEye;
 
+#define USE_PRINTF 1
+
+#if USE_PRINTF
+#extension GL_EXT_debug_printf : enable
+#endif
+
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(set = 2, binding = 0, rgba8) uniform image2D OutputRender;
 #pragma scenery endverbatim
@@ -73,6 +79,14 @@ uniform float stepsPerVoxel;
 
 void main()
 {
+    bool fixedStepSizeLocal = true;
+    float stepsPerVoxelLocal = 1.0f;
+
+    bool debug_pixel = false;
+    if(gl_GlobalInvocationID.xy == ivec2(760, 510)) {
+        debug_pixel = true;
+    }
+
     mat4 ipv = InverseViewMatrices[0] * InverseProjectionMatrix;
     // frag coord in NDC
     // TODO: Re-introduce dithering
@@ -128,8 +142,8 @@ void main()
 
 		float stepWidth = nw;
 
-		if(fixedStepSize) {
-			stepWidth = (2*nw) / stepsPerVoxel;
+		if(fixedStepSizeLocal) {
+			stepWidth = (2*nw) / stepsPerVoxelLocal;
 			numSteps = int ( trunc( ( tfar - tnear ) / stepWidth + 1 ) );
 		}
 
@@ -143,6 +157,15 @@ void main()
         vec4 v = vec4( 0 );
 		for ( int i = 0; i < numSteps; ++i)
         {
+            if(i % 100 == 0) {
+                #if USE_PRINTF
+                if(debug_pixel) {
+                    debugPrintfEXT("Step number: %d, numSteps: %d, step: %f", i, numSteps, step);
+                    debugPrintfEXT("Current color: (%f, %f, %f, %f)", v.rgba);
+                }
+                #endif
+            }
+
             vec4 wpos = mix( wfront, wback, step );
 
             // $insert{Accumulate}
@@ -157,7 +180,7 @@ void main()
             */
             wprev = wpos;
 
-            if(fixedStepSize) {
+            if(fixedStepSizeLocal) {
                 step += stepWidth;
             } else {
                 step += nw + step * fwnw;
@@ -165,6 +188,12 @@ void main()
         }
 //        v.xyz = pow(v.xyz, vec3(1/2.2));
         v.rgb *= v.a;
+        #if USE_PRINTF
+        if(debug_pixel) {
+            debugPrintfEXT("Final color: (%f, %f, %f, %f)", v.rgba);
+        }
+        #endif
+
         FragColor = v;
     } else {
         FragColor = vec4(0, 0, 0, 0);

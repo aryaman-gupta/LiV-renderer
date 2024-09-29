@@ -83,8 +83,11 @@ uniform float stepsPerVoxel;
 
 void main()
 {
+    bool fixedStepSizeLocal = true;
+    float stepsPerVoxelLocal = 1.0f;
+
     bool debug_pixel = false;
-    if(gl_GlobalInvocationID.xy == ivec2(640, 360)) {
+    if(gl_GlobalInvocationID.xy == ivec2(760, 510)) {
         debug_pixel = true;
     }
 
@@ -171,6 +174,12 @@ void main()
 
     if ( tnear < tfar )
     {
+
+        #if USE_PRINTF
+        if(debug_pixel) {
+            debugPrintfEXT("tnear is less than tfar");
+        }
+        #endif
         vec4 fb = wback - wfront;
         int numSteps =
         ( fwnw > 0.00001 )
@@ -179,8 +188,8 @@ void main()
 
 		float stepWidth = nw;
 
-		if(fixedStepSize) {
-			stepWidth = (2*nw) / stepsPerVoxel;
+		if(fixedStepSizeLocal) {
+			stepWidth = (2*nw) / stepsPerVoxelLocal;
 			numSteps = int ( trunc( ( tfar - tnear ) / stepWidth + 1 ) );
 		}
 
@@ -194,6 +203,15 @@ void main()
         vec4 v = vec4( 0 );
 		for ( int i = 0; i < numSteps; ++i)
         {
+            if(i % 100 == 0) {
+                #if USE_PRINTF
+                if(debug_pixel) {
+                    debugPrintfEXT("Step number: %d, numSteps: %d, step: %f", i, numSteps, step);
+                    debugPrintfEXT("Current color: (%f, %f, %f, %f)", v.rgba);
+                }
+                #endif
+            }
+
             vec4 wpos = mix( wfront, wback, step );
 
             // $insert{Accumulate}
@@ -208,25 +226,27 @@ void main()
             */
             wprev = wpos;
 
-            if(fixedStepSize) {
+            if(fixedStepSizeLocal) {
                 step += stepWidth;
             } else {
                 step += nw + step * fwnw;
             }
 
-            if (step > domain_end_points[index] || i == numSteps - 1) {
+            if (step > domain_end_points[index] || i == (numSteps - 1) || v.a >= 0.99) {
                 //the step is larger than the current domain end point, or it is the last step, so we need to stop
-                #if USE_PRINTF
-                if(debug_pixel) {
-                    debugPrintfEXT("Step: %f is beyond domain boundary of %d", step, index);
-                    debugPrintfEXT("Storing color value: (%f, %f, %f, %f) and depth %f", v.rgba, step);
-                }
-                #endif
 
 //                v.xyz = pow(v.xyz, vec3(1/2.2));
                 v.rgb *= v.a;
                 colors[index] = v;
                 depths[index] = step;
+
+                #if USE_PRINTF
+                if(debug_pixel) {
+                    debugPrintfEXT("Step: %f is beyond domain boundary of %d", step, index);
+                    debugPrintfEXT("layer has been assigned color: (%f, %f, %f, %f) and depth %f", v.rgba, step);
+                }
+                #endif
+
                 v = vec4(0);
                 index++;
             }
