@@ -66,15 +66,35 @@ class VolumeManagerManager (var hub: Hub) {
     }
 
 
-    private fun createVolumeManager(raycastShaderName: String): VolumeManager {
-        return VolumeManager(hub,
-            useCompute = true,
-            customSegments = hashMapOf(
-                SegmentType.FragmentShader to SegmentTemplate(
-                    this.javaClass,
-                    raycastShaderName,
-                    "intersectBoundingBox", "vis", "localNear", "localFar", "SampleVolume", "Convert", "Accumulate"),
-            ))
+    private fun createVolumeManager(raycastShaderName: String, accumulateShader: String = ""): VolumeManager {
+        if(accumulateShader == "") {
+            return VolumeManager(
+                hub,
+                useCompute = true,
+                customSegments = hashMapOf(
+                    SegmentType.FragmentShader to SegmentTemplate(
+                        this.javaClass,
+                        raycastShaderName,
+                        "intersectBoundingBox", "vis", "localNear", "localFar", "SampleVolume", "Convert", "Accumulate"
+                    ),
+                )
+            )
+        } else {
+            return VolumeManager(
+                hub, useCompute = true,
+                customSegments = hashMapOf(
+                    SegmentType.FragmentShader to SegmentTemplate(
+                        this::class.java,
+                        raycastShaderName,
+                        "intersectBoundingBox", "vis", "localNear", "localFar", "SampleVolume", "Convert", "Accumulate",
+                    ),
+                    SegmentType.Accumulator to SegmentTemplate(
+                        accumulateShader,
+                        "vis", "localNear", "localFar", "sampleVolume", "convert", "sceneGraphVisibility"
+                    ),
+                ),
+            )
+        }
     }
 
     fun instantiateVolumeManager(outputType: OutputType, windowWidth: Int, windowHeight: Int) {
@@ -90,7 +110,7 @@ class VolumeManagerManager (var hub: Hub) {
 
             colorTexture = volumeManager.material().textures["OutputRender"]
         } else if (outputType == OutputType.LAYERED_IMAGE) {
-            volumeManager = createVolumeManager("ComputeNonConvex.comp")
+            volumeManager = createVolumeManager("ComputeNonConvex.comp", "AccumulateNonConvex.comp")
             volumeManager.customTextures.add("LayeredColors")
             volumeManager.customTextures.add("LayeredDepths")
 
