@@ -9,7 +9,7 @@ import graphics.scenery.textures.Texture
 import graphics.scenery.ui.SwingBridgeFrame
 import graphics.scenery.utils.Image
 import graphics.scenery.utils.SystemHelpers
-import graphics.scenery.utils.extensions.fetchTexture
+import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.volumes.*
 import net.imglib2.type.numeric.integer.UnsignedByteType
 import net.imglib2.type.numeric.integer.UnsignedShortType
@@ -118,12 +118,22 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
         volumes[volumeID]?.goToLastTimepoint()
     }
 
+    @Suppress("unused")
+    fun waitRendererReady() {
+        while (renderer == null) {
+            Thread.sleep(50)
+        }
+        while (!renderer!!.initialized) {
+            Thread.sleep(50)
+        }
+    }
+
     val nonConvex = false
 
     override fun init() {
         logger.info("setting renderer device id to: $nodeRank")
 //        System.setProperty("scenery.Renderer.DeviceId", nodeRank.toString())
-        System.setProperty("scenery.Renderer.DeviceId", "1")
+        System.setProperty("scenery.Renderer.DeviceId", "0")
 
         renderer = hub.add(Renderer.createRenderer(hub, applicationName, scene, windowWidth, windowHeight))
 
@@ -176,8 +186,6 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
 
         logger.info("Exiting init function!")
 
-//        renderer!!.recordMovie("Gray_scott.mp4")
-
 
         thread {
             manageDVR(volumeManagerManager)
@@ -222,16 +230,16 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
             val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
             val depthTexture = volumeManagerManager.getDepthTextureOrNull()
 
-            var textureFetched = Texture().fetchTexture(colorTexture)
+            var textureFetched = colorTexture.fetchFromGPU()
 
-            if (textureFetched < 0) {
+            if (!textureFetched) {
                 logger.error("Error fetching layered color texture. return value: $textureFetched")
             }
 
             depthTexture?.let {
-                textureFetched = Texture().fetchTexture(depthTexture)
+                textureFetched = depthTexture.fetchFromGPU()
 
-                if (textureFetched < 0) {
+                if (!textureFetched) {
                     logger.error("Error fetching layered depth texture. return value: $textureFetched")
                 }
             }

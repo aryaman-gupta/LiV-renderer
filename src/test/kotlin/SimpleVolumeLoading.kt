@@ -13,12 +13,12 @@ fun main() {
 
     thread {
         instance.main()
+
+        //wait for some time
         Thread.sleep(100000)
     }
 
-    while (instance.hub.get(SceneryElement.Renderer)==null) {
-        Thread.sleep(50)
-    }
+    instance.waitRendererReady()
 
     // Set the volume dimensions
     val volumeDims = intArrayOf(128, 128, 256)
