@@ -85,7 +85,7 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
         volume.spatial().position = Vector3f(pos[0], pos[1], pos[2])
 
         volume.spatial().needsUpdate = true
-        volume.colormap = Colormap.get("rbdarker")
+        volume.colormap = Colormap.get("rb-darker")
         volume.pixelToWorldRatio = pixelToWorld
 
         val tf = TransferFunction()
@@ -145,7 +145,8 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
         if (!nonConvex) {
             volumeManagerManager.instantiateVolumeManager(
                 VolumeManagerManager.OutputType.REGULAR_IMAGE,
-                windowWidth, windowHeight
+                windowWidth, windowHeight,
+                scene
             )
 
             scene.addChild(plane)
@@ -153,7 +154,8 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
         } else {
             volumeManagerManager.instantiateVolumeManager(
                 VolumeManagerManager.OutputType.LAYERED_IMAGE,
-                windowWidth, windowHeight
+                windowWidth, windowHeight,
+                scene
             )
         }
 
