@@ -5,6 +5,7 @@ import bvv.core.shadergen.generate.SegmentType
 import graphics.scenery.textures.Texture
 import graphics.scenery.utils.Image
 import graphics.scenery.volumes.VolumeManager
+import graphics.scenery.volumes.vdi.VDIVolumeManager
 import net.imglib2.type.numeric.integer.UnsignedByteType
 import net.imglib2.type.numeric.integer.UnsignedShortType
 import net.imglib2.type.numeric.real.FloatType
@@ -65,7 +66,6 @@ class VolumeManagerManager (var hub: Hub) {
         }
     }
 
-
     private fun createVolumeManager(raycastShaderName: String, accumulateShader: String = ""): VolumeManager {
         if(accumulateShader == "") {
             return VolumeManager(
@@ -97,7 +97,7 @@ class VolumeManagerManager (var hub: Hub) {
         }
     }
 
-    fun instantiateVolumeManager(outputType: OutputType, windowWidth: Int, windowHeight: Int) {
+    fun instantiateVolumeManager(outputType: OutputType, windowWidth: Int, windowHeight: Int, scene: Scene) {
 
         this.outputType = outputType
         if (outputType == OutputType.REGULAR_IMAGE) {
@@ -129,6 +129,10 @@ class VolumeManagerManager (var hub: Hub) {
             colorTexture = volumeManager.material().textures["LayeredColors"]
             depthTexture = volumeManager.material().textures["LayeredDepths"]
         } else if (outputType == OutputType.VDI) {
+            val vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
+            volumeManager = vdiVolumeManager.createVDIVolumeManager(vdiFull = false)
+            colorTexture = vdiVolumeManager.getColorTextureOrNull()
+            depthTexture = vdiVolumeManager.getDepthTextureOrNull()
         }
         hub.add(volumeManager)
     }
