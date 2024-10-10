@@ -16,8 +16,13 @@ class VolumeManagerManager (var hub: Hub) {
     val NUM_LAYERS = 2
 
     private lateinit var volumeManager: VolumeManager
+    private var firstPassTexture: Texture? = null
     private var colorTexture: Texture? = null
     private var depthTexture: Texture? = null
+
+    fun getFirstPassTextureOrNull(): Texture? {
+        return firstPassTexture
+    }
 
     fun getColorTextureOrNull(): Texture? {
         return colorTexture
@@ -38,7 +43,8 @@ class VolumeManagerManager (var hub: Hub) {
     enum class OutputType {
         REGULAR_IMAGE,
         LAYERED_IMAGE,
-        VDI
+        VDI,
+        TEST_VDI_FULL
     }
 
     private lateinit var outputType: OutputType
@@ -131,6 +137,12 @@ class VolumeManagerManager (var hub: Hub) {
         } else if (outputType == OutputType.VDI) {
             val vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
             volumeManager = vdiVolumeManager.createVDIVolumeManager(vdiFull = false)
+            colorTexture = vdiVolumeManager.getColorTextureOrNull()
+            depthTexture = vdiVolumeManager.getDepthTextureOrNull()
+            firstPassTexture = vdiVolumeManager.getNumGeneratedTextureOrNull()
+        } else if (outputType == OutputType.TEST_VDI_FULL) {
+            val vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
+            volumeManager = vdiVolumeManager.createVDIVolumeManager(vdiFull = true)
             colorTexture = vdiVolumeManager.getColorTextureOrNull()
             depthTexture = vdiVolumeManager.getDepthTextureOrNull()
         }
