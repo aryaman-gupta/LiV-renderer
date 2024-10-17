@@ -4,6 +4,7 @@ import graphics.scenery.VolumeManagerManager
 import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.utils.lazyLogger
 import java.nio.ByteBuffer
+import kotlin.math.exp
 
 /**
  * Data class representing MPI (Message Passing Interface) parameters.
@@ -23,12 +24,14 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
     val logger by lazyLogger()
 
     open val twoPassRendering = false
+    open val explicitCompositingStep = false
 
     open val firstPassFlag = ""
     open val secondPassFlag = ""
 
     var firstPass = true
     var secondPass = false
+    var compositingPass = false
 
     open fun getFirstPassData(): ByteBuffer {
         val firstPassTexture = volumeManagerManager.getFirstPassTextureOrNull()!!
@@ -41,7 +44,9 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
         return firstPassTexture.contents!!
     }
 
-    abstract fun processFirstPassData(data: ByteBuffer)
+    open fun processFirstPassData(data: ByteBuffer) {
+        // Override to process first pass data if the renderer is using a 2-pass approach
+    }
 
     open fun fetchAdditionalTextureData(): List<ByteBuffer> {
         return emptyList()
@@ -58,19 +63,8 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
     abstract fun distributeForCompositing(buffers: List<ByteBuffer>)
 
     fun postRender() {
-        if(firstPass) {
-            // Data generated in the first pass is fetched and processed
-            val firstPassData = getFirstPassData()
-            processFirstPassData(firstPassData)
 
-            firstPass = false
-            secondPass = true
-
-            volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = false
-            volumeManagerManager.getVolumeManager().shaderProperties[secondPassFlag] = true
-        } else if(secondPass) {
-            // Final generated (rendered) buffers are fetched and distributed for compositing
-
+        if(!twoPassRendering) {
             val buffersToDistribute: MutableList<ByteBuffer> = mutableListOf()
             val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
             var textureFetched = colorTexture.fetchFromGPU()
@@ -80,20 +74,81 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
 
             buffersToDistribute.add(colorTexture.contents!!)
 
-            // safe to assume that a 2-pass approach will always have a depth texture
-            val depthTexture = volumeManagerManager.getDepthTextureOrNull()!!
-            textureFetched = depthTexture.fetchFromGPU()
-            if (!textureFetched) {
-                throw RuntimeException("Error fetching depth texture.").also { it.printStackTrace() }
-            }
+            // can't assume that a depth texture will always be present
+            val depthTexture = volumeManagerManager.getDepthTextureOrNull()
+            if(depthTexture != null) {
+                textureFetched = depthTexture.fetchFromGPU()
+                if (!textureFetched) {
+                    throw RuntimeException("Error fetching depth texture.").also { it.printStackTrace() }
+                }
 
-            buffersToDistribute.add(depthTexture.contents!!)
+                buffersToDistribute.add(depthTexture.contents!!)
+            }
 
             fetchAdditionalTextureData().forEach {
                 buffersToDistribute.add(it)
             }
 
             distributeForCompositing(buffersToDistribute)
+
+            if(explicitCompositingStep) {
+                compositingPass = true
+                firstPass = false
+                volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = false
+            }
+        } else {
+            if(firstPass) {
+                // Data generated in the first pass is fetched and processed
+                val firstPassData = getFirstPassData()
+                processFirstPassData(firstPassData)
+
+                firstPass = false
+                secondPass = true
+
+                volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = false
+                volumeManagerManager.getVolumeManager().shaderProperties[secondPassFlag] = true
+            } else if(secondPass) {
+                // Final generated (rendered) buffers are fetched and distributed for compositing
+
+                val buffersToDistribute: MutableList<ByteBuffer> = mutableListOf()
+                val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
+                var textureFetched = colorTexture.fetchFromGPU()
+                if (!textureFetched) {
+                    throw RuntimeException("Error fetching color texture.").also { it.printStackTrace() }
+                }
+
+                buffersToDistribute.add(colorTexture.contents!!)
+
+                // safe to assume that a 2-pass approach will always have a depth texture
+                val depthTexture = volumeManagerManager.getDepthTextureOrNull()!!
+                textureFetched = depthTexture.fetchFromGPU()
+                if (!textureFetched) {
+                    throw RuntimeException("Error fetching depth texture.").also { it.printStackTrace() }
+                }
+
+                buffersToDistribute.add(depthTexture.contents!!)
+
+                fetchAdditionalTextureData().forEach {
+                    buffersToDistribute.add(it)
+                }
+
+                distributeForCompositing(buffersToDistribute)
+
+                if(explicitCompositingStep) {
+                    secondPass = false
+                    compositingPass = true
+                    volumeManagerManager.getVolumeManager().shaderProperties[secondPassFlag] = false
+                } else {
+                    secondPass = false
+                    firstPass = true
+                    volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
+                }
+            }
         }
+
+        if(explicitCompositingStep && compositingPass) {
+
+        }
+
     }
 }
