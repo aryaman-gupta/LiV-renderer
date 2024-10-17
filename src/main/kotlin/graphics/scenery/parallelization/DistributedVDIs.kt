@@ -8,7 +8,7 @@ import org.lwjgl.system.MemoryUtil
 import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 
-class DistributedVDIGenerator(volumeManagerManager: VolumeManagerManager, val windowWidth: Int, val windowHeight: Int, mpiParameters: MPIParameters)
+class DistributedVDIs(volumeManagerManager: VolumeManagerManager, val windowWidth: Int, val windowHeight: Int, mpiParameters: MPIParameters)
     : DistributedRenderer(volumeManagerManager, mpiParameters) {
 
     override val twoPassRendering = true
