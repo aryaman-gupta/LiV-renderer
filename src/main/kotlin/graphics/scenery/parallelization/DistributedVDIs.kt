@@ -1,5 +1,6 @@
-package graphics.scenery
+package graphics.scenery.parallelization
 
+import graphics.scenery.VolumeManagerManager
 import graphics.scenery.textures.Texture
 import net.imglib2.type.numeric.integer.IntType
 import org.joml.Vector3i
@@ -23,6 +24,7 @@ class DistributedVDIGenerator(volumeManagerManager: VolumeManagerManager, val wi
     var distributePrefixPointer: Long = 0L
     var mpiPointer: Long = 0L
 
+    @Suppress("unused")
     private external fun distributeVDIs(subVDIColor: ByteBuffer, subVDIDepth: ByteBuffer, prefixSums: ByteBuffer, supersegmentCounts: IntArray, commSize: Int,
                                         colPointer: Long, depthPointer: Long, prefixPointer: Long, mpiPointer: Long)
 
@@ -53,7 +55,6 @@ class DistributedVDIGenerator(volumeManagerManager: VolumeManagerManager, val wi
             minFilter = Texture.FilteringMode.NearestNeighbour,
             maxFilter = Texture.FilteringMode.NearestNeighbour
         )
-
     }
 
     override fun distributeForCompositing(buffers: List<ByteBuffer>) {
@@ -85,6 +86,7 @@ class DistributedVDIGenerator(volumeManagerManager: VolumeManagerManager, val wi
             logger.debug("Rank: $rank will send ${supersegmentCounts[commSize-1]} supersegments to process ${commSize-1}")
         }
 
-        distributeVDIs(colorBuffer, depthBuffer, prefixBuffer!!, supersegmentCounts, commSize, distributeColorPointer, distributeDepthPointer, distributePrefixPointer, mpiPointer)
+        distributeVDIs(colorBuffer, depthBuffer, prefixBuffer!!, supersegmentCounts, commSize, distributeColorPointer,
+            distributeDepthPointer, distributePrefixPointer, mpiPointer)
     }
 }

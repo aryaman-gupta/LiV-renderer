@@ -1,6 +1,6 @@
-package graphics.scenery
+package graphics.scenery.parallelization
 
-import graphics.scenery.textures.Texture
+import graphics.scenery.VolumeManagerManager
 import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.utils.lazyLogger
 import java.nio.ByteBuffer
