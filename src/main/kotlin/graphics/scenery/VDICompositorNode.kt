@@ -1,8 +1,16 @@
 package graphics.scenery
 
+import graphics.scenery.backends.Shaders
+import graphics.scenery.compute.ComputeMetadata
+import graphics.scenery.textures.Texture
+import graphics.scenery.utils.Image
+import graphics.scenery.volumes.vdi.VDINode
+import net.imglib2.type.numeric.real.FloatType
 import org.joml.Matrix4f
+import org.joml.Vector3i
+import org.lwjgl.system.MemoryUtil
 
-class VDICompositorNode : RichNode() {
+class VDICompositorNode(windowWidth: Int, windowHeight: Int, numSupersegments: Int, mpiCommSize: Int) : RichNode() {
 
     // camera parameters
     @ShaderProperty
@@ -35,13 +43,32 @@ class VDICompositorNode : RichNode() {
     var isCompact = true
 
     @ShaderProperty
-    var windowWidth = 0
+    var vdiWidth = 0
 
     @ShaderProperty
-    var windowHeight = 0
+    var vdiHeight = 0
 
     init {
+        name = "VDICompositorNode"
+        setMaterial(ShaderMaterial(Shaders.ShadersFromFiles(arrayOf("VDICompositor.comp"), this@VDICompositorNode::class.java)))
 
+        // set up the output textures
+        val outputColours = MemoryUtil.memCalloc(VDINode.getColorBufferSize(windowWidth, windowHeight, numSupersegments) / mpiCommSize)
+        val outputDepths = MemoryUtil.memCalloc(VDINode.getDepthBufferSize(windowWidth, windowHeight, numSupersegments) / mpiCommSize)
+        val compositedVDIColor = VDINode.generateColorTexture(windowWidth, windowHeight, numSupersegments, outputColours)
+        val compositedVDIDepth = VDINode.generateDepthTexture(windowWidth, windowHeight, numSupersegments, outputDepths)
+        material().textures["CompositedVDIColor"] = compositedVDIColor
+        material().textures["CompositedVDIDepth"] = compositedVDIDepth
+
+        metadata["ComputeMetadata"] = ComputeMetadata(
+            workSizes = Vector3i(windowWidth/mpiCommSize, windowHeight, 1)
+        )
+        vdiWidth = windowWidth
+        vdiHeight = windowHeight
+
+        numProcesses = mpiCommSize
+
+        isCompact = true
     }
 
 }
