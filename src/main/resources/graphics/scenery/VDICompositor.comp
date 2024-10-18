@@ -1,0 +1,555 @@
+#version 450
+#extension GL_EXT_debug_printf : enable
+#define USE_PRINTF 1
+
+layout(set = 5, binding = 0) uniform ShaderProperties {
+    mat4 ProjectionOriginal;
+    mat4 invProjectionOriginal;
+    mat4 ViewOriginal;
+    mat4 invViewOriginal;
+    float nw;
+    bool doComposite;
+    int numProcesses;
+    int windowWidth;
+    int windowHeight;
+    bool isDense;
+    int totalSupersegmentsFrom[50]; // the total supersegments received from a given PE
+};
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout (set = 0, binding = 0, rgba32f) uniform readonly image3D VDIsColor;
+layout (set = 1, binding = 0, r32f) uniform readonly image3D VDIsDepth;
+layout (set = 2, binding = 0, r32i) uniform iimage2D VDIsPrefix;
+layout (set = 3, binding = 0, rgba32f) uniform image3D CompositedVDIColor; //TODO: put loadstore
+layout (set = 4, binding = 0, r32f) uniform image3D CompositedVDIDepth; //TODO: put loadstore
+
+float adjustOpacity(float a, float modifiedStepLength) {
+    return 1.0 - pow((1.0 - a), modifiedStepLength);
+}
+
+ivec2 debug_pixel = ivec2(80, 360);
+
+int frontSupersegment[50]; // which supersegment of this pixel are we currently looking at, for each process
+int supersegmentsFromPE[50]; //how many supersegments did this list receive from each of the PEs
+int cumulativePrefixIncrements[50];
+int numInputSupersegments;
+ivec3 opImageCoords;
+
+int bufferWidth;
+int bufferHeight;
+int bufferDepth;
+
+ivec3 supersegmentIndices(ivec2 theList, int index, int processID) {
+    int linearized = imageLoad(VDIsPrefix, theList.yx).x + index + cumulativePrefixIncrements[processID] - imageLoad(VDIsPrefix, ivec2(0, (((windowWidth / numProcesses) * (processID))))).x;
+    if(gl_GlobalInvocationID.xy == debug_pixel) {
+        debugPrintfEXT("Linearized loc: %d", linearized);
+    }
+
+    int z_ = linearized / (bufferWidth * bufferHeight);
+
+    int remainder = linearized % (bufferWidth * bufferHeight);
+
+    int y_ = remainder / bufferWidth;
+    int x_ = remainder % bufferWidth;
+
+    return ivec3(x_, y_, z_);
+}
+
+int determineNextSupseg(int numProcesses, out float startDepth, out float endDepth, out vec4 colour) {
+
+    startDepth = 0;
+    endDepth = 0;
+    colour = vec4(0);
+    float lowDepth = 100000.0; //INF
+    int lowIndex = -1;
+
+    //Loop over VDI slices from all processes to determine which one has a supersegment that is next along the ray
+    for (int j = 0; j < numProcesses; j++) {
+
+        int numInputs;
+        if(isDense) {
+            numInputs = supersegmentsFromPE[j];
+        } else {
+            numInputs = numInputSupersegments;
+        }
+
+        if(gl_GlobalInvocationID.xy == debug_pixel) {
+            debugPrintfEXT("front supseg: %d", frontSupersegment[j]);
+        }
+        if(frontSupersegment[j] >= numInputs) {
+            continue;
+        }
+
+        ivec3 indices;
+        if(isDense) {
+            indices = supersegmentIndices(ivec2(j * opImageCoords.z + gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), frontSupersegment[j], j);
+            if(gl_GlobalInvocationID.xy == debug_pixel) {
+                debugPrintfEXT("The buffer indices are: %d, %d, %d", indices.xyz);
+            }
+        } else {
+            indices = ivec3(frontSupersegment[j], gl_GlobalInvocationID.y, j * opImageCoords.z + gl_GlobalInvocationID.x);
+        }
+
+        float curStartDepth = imageLoad(VDIsDepth, ivec3(indices.x * 2, indices.yz)).x;
+
+        //        #if USE_PRINTF
+        //        if(gl_GlobalInvocationID.xy == debug_pixel) {
+        //            debugPrintfEXT("Loaded start depth: %f from supseg: %d of process: %d", curStartDepth, frontSupersegment[j], j);
+        //            debugPrintfEXT("Indexes used for fetching were: y: %d and z: %d", gl_GlobalInvocationID.y, j * opImageCoords.z + gl_GlobalInvocationID.x);
+        //        }
+        //        #endif
+
+        if(curStartDepth < lowDepth && curStartDepth != 0) { //todo: improve empty detection
+            lowDepth = curStartDepth;
+            lowIndex = j;
+            startDepth = curStartDepth;
+            endDepth = imageLoad(VDIsDepth, ivec3(indices.x * 2 + 1, indices.yz)).x;
+            colour = imageLoad(VDIsColor, ivec3(indices)).rgba;
+        }
+    }
+
+    return lowIndex;
+}
+
+float diffPremultiplied(vec4 a, vec4 b) {
+    a.rgb = a.rgb * a.a;
+    b.rgb = b.rgb * b.a;
+
+    return length(a.rgb-b.rgb);
+}
+
+vec4 test = vec4(0);
+
+void writeSupersegment(int index, float start, float end, vec4 color) {
+
+    vec3 newColor = color.rgb;
+    float newAlpha = color.a;
+
+    float ndc_x = (float(gl_GlobalInvocationID.x) / float(windowWidth)) * 2.0 - 1.0;
+    float ndc_y = (float(gl_GlobalInvocationID.y) / float(windowHeight)) * 2.0 - 1.0;
+
+    vec4 supseg_start_w = invProjectionOriginal * vec4(ndc_x, ndc_y, start, 1);
+    supseg_start_w *= 1. / supseg_start_w.w;
+
+    vec4 supseg_end_w = invProjectionOriginal * vec4(ndc_x, ndc_y, end, 1);
+    supseg_end_w *= 1. / supseg_end_w.w;
+
+    float length_in_supseg = distance(supseg_start_w, supseg_end_w);
+
+    float adj_alpha = adjustOpacity(newAlpha, length_in_supseg);
+
+    #if USE_PRINTF
+    if(gl_GlobalInvocationID.xy == debug_pixel) {
+        debugPrintfEXT("Supseg: %d. Color is: (%f, %f, %f). Opacity: %f and adj opacity: %f. Supseg length: %f", index, newColor.rgb, newAlpha, adj_alpha, distance(supseg_start_w, supseg_end_w));
+    }
+    #endif
+
+    test.rgb = test.rgb + (1.0f - test.a) * newColor * adj_alpha;
+    test.a = test.a + (1.0f - test.a) * adj_alpha;
+
+    if(gl_GlobalInvocationID.xy == debug_pixel) {
+        debugPrintfEXT("accumulated color so far: (%f, %f, %f, %f)", test.rgba);
+    }
+
+    #if USE_PRINTF
+    if(gl_GlobalInvocationID.xy == debug_pixel) {
+        debugPrintfEXT("Writing supseg: %d. Start: %f, end: %f, color: (%f, %f, %f, %f)", index, start, end, color.rgba);
+    }
+    #endif
+
+    if(start >= end) {
+        debugPrintfEXT("Error! Incorrect supersegment written at index: %d of list: (%d, %d). Start was: %f and end was: %f", index, gl_GlobalInvocationID.xy, start, end);
+    }
+
+    imageStore(CompositedVDIDepth, ivec3(2 * index, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(start, 0, 0, 0));
+    imageStore(CompositedVDIDepth, ivec3(2 * index + 1, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(end, 0, 0, 0));
+    imageStore(CompositedVDIColor, ivec3(index, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), color);
+
+}
+
+int numSupersegmentsIn(ivec2 theList, int process_id) {
+
+    if(theList.x == (((windowWidth / numProcesses) * (process_id + 1)) - 1) && theList.y == (windowHeight - 1)) {
+        if(gl_GlobalInvocationID.xy == debug_pixel) {
+            debugPrintfEXT("total from process: %d. At (%d, %d): %d", totalSupersegmentsFrom[process_id], theList.yx, imageLoad(VDIsPrefix, ivec2(theList.yx)));
+            debugPrintfEXT("Start prefix of process, at (%d, %d): %d", ivec2(0, (((windowWidth / numProcesses) * (process_id)))), imageLoad(VDIsPrefix, ivec2(0, (((windowWidth / numProcesses) * (process_id))))));
+        }
+        return totalSupersegmentsFrom[process_id] - (imageLoad(VDIsPrefix, ivec2(theList.yx)) - imageLoad(VDIsPrefix, ivec2(0, (((windowWidth / numProcesses) * (process_id)))))).x;
+    } else {
+        ivec2 nextList;
+        if(gl_GlobalInvocationID.y < (windowHeight - 1)) {
+            //this is not a corner list
+            nextList = ivec2(theList.y + 1, theList.x);
+        } else {
+            //this is a corner list but not the last
+            nextList = ivec2(0, theList.x+1);
+        }
+
+        int prefixNext = imageLoad(VDIsPrefix, ivec2(nextList)).x;
+        int prefixThis = imageLoad(VDIsPrefix, ivec2(theList.yx)).x;
+
+        if(gl_GlobalInvocationID.xy == debug_pixel) {
+            debugPrintfEXT("theList: (%d, %d), nextList: (%d, %d)", theList.xy, nextList.xy);
+            debugPrintfEXT("prefix next: %d, this: %d", prefixNext, prefixThis);
+        }
+
+        if(prefixNext == 0 && prefixThis != 0) {
+            return totalSupersegmentsFrom[process_id] - prefixThis;
+        } else {
+            return prefixNext - prefixThis;
+        }
+    }
+}
+
+void main() {
+
+    #if USE_PRINTF
+    if(gl_GlobalInvocationID.xy == debug_pixel) {
+        debugPrintfEXT("Hello World! This is the new shader!");
+    }
+    #endif
+
+    if(!doComposite) {
+        #if USE_PRINTF
+        if(gl_GlobalInvocationID.xy == debug_pixel) {
+            debugPrintfEXT("VDICompositor: skipping this pass!");
+        }
+        #endif
+        return;
+    }
+
+    if(gl_GlobalInvocationID.x >= windowWidth || gl_GlobalInvocationID.y >= windowHeight) {
+        return;
+    }
+
+    ivec3 bufferCoords  = imageSize(VDIsColor);
+    bufferWidth = bufferCoords.x;
+    bufferHeight = bufferCoords.y;
+    bufferDepth = bufferCoords.z;
+
+    mat4 pv_orig = ProjectionOriginal * ViewOriginal;
+
+    mat4 ivp_orig = invViewOriginal * invProjectionOriginal;
+
+    //    if(!doComposite) {
+    //        return;
+    //    }
+
+    opImageCoords = imageSize(CompositedVDIColor);
+    int numOutputSupersegments = opImageCoords.x;
+
+    if(isDense) {
+
+        //        int lists_per_process = windowWidth * windowHeight / numProcesses;
+
+        //        uint current_list_id = gl_GlobalInvocationID.y * windowWidth + gl_GlobalInvocationID.x + 1;
+
+        //        uint process_id = current_list_id % lists_per_process; //which process does this list come from? (0-indexed)
+
+        int cumulativeSupsegs = 0;
+
+        for(int i = 0; i < numProcesses; i++) {
+            ivec2 listID = ivec2(i * opImageCoords.z + gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+            supersegmentsFromPE[i] = numSupersegmentsIn(listID, i);
+            #if USE_PRINTF
+            if(gl_GlobalInvocationID.xy == debug_pixel) {
+                debugPrintfEXT("Received %d supersegments from PE %d", supersegmentsFromPE[i], i);
+            }
+            if(supersegmentsFromPE[i] < 0 || supersegmentsFromPE[i] > 20) {
+                debugPrintfEXT("Error! invoc id: (%d, %d) has %d supersegs from process: %d", gl_GlobalInvocationID.xy, supersegmentsFromPE[i], i);
+            }
+            #endif
+            cumulativePrefixIncrements[i] = cumulativeSupsegs;
+            cumulativeSupsegs += totalSupersegmentsFrom[i];
+        }
+
+    } else {
+        ivec3 imageCoords  = imageSize(VDIsColor);
+        numInputSupersegments = imageCoords.r;
+    }
+
+    //    for(int i = 0; i< 50; i++) {
+    //        imageStore(CompositedVDIColor, ivec2(i, gl_GlobalInvocationID.x), vec4(1));
+    //    }
+
+    #if USE_PRINTF
+    if(gl_GlobalInvocationID.xy == debug_pixel) {
+        debugPrintfEXT("Op image coords are: (%d, %d, %d)", opImageCoords.xyz);
+    }
+    #endif
+
+    //    int numProcesses = opImageCoords.g / opImageCoords.b; //TODO: generalize for non square images
+
+    float startDepth;
+    float endDepth;
+    vec4 colour;
+
+    float lowDepth;
+    int lowIndex;
+
+    float ndc_x = (float(gl_GlobalInvocationID.x) / float(windowWidth)) * 2.0 - 1.0;
+    float ndc_y = (float(gl_GlobalInvocationID.y) / float(windowHeight)) * 2.0 - 1.0;
+
+    int supersegmentNum = 0;
+
+    float low_thresh = 0.0;
+    float high_thresh = 1.732; //sq. root of 3
+    float mid_thresh = (high_thresh + low_thresh) / 2.; //TODO: would it help to start off with a very low thresh to eliminate those rays that contain primarily homogenous regions already?
+    float newSupSegThresh;
+
+    bool thresh_found = false;
+
+    bool final_generation_step = false;
+    bool supsegs_written = false;
+
+    int desired_supsegs = numOutputSupersegments;
+    int delta = 3; // up to delta supsegs less than max is acceptable
+
+    int iter = 0;
+    bool first_iteration = true;
+
+    while(!thresh_found || !supsegs_written) {
+        iter++;
+        //        if(iter > 1) {
+        //            break;
+        //        }
+        if (thresh_found) {
+            supsegs_written = true;
+        }
+        newSupSegThresh = mid_thresh;
+
+        int num_terminations = 0;
+
+        bool supersegmentIsOpen = false;
+
+        float supSegStartPoint = 0.0;
+        float supSegEndPoint = 0.0;
+        float supSegEndPoint_trunc_trans = 0.0;
+        bool transparentSample = false;
+        int samplesInSupseg = 0;
+        vec4 supersegmentAdjusted = vec4(0);
+
+        vec4 curV = vec4(0);
+
+        for (int i = 0; i<numProcesses; i++) {
+            frontSupersegment[i] = 0;
+        }
+
+        bool samplesComplete = false;
+
+        int num_samples = 0;
+
+        while (!samplesComplete) {
+            // Looping across all input supersegments (= samples)
+            transparentSample = false;
+            num_samples++;
+
+            #if USE_PRINTF
+            if(gl_GlobalInvocationID.xy == debug_pixel) {
+                debugPrintfEXT("Looking for the next supseg %d. Num processes: %d", num_samples, numProcesses);
+            }
+            #endif
+
+            int processId = determineNextSupseg(numProcesses, startDepth, endDepth, colour);
+
+            #if USE_PRINTF
+            if(gl_GlobalInvocationID.xy == debug_pixel) {
+                debugPrintfEXT("Iteration: %d. Found supseg from process: %d startDepth: %f, endDepth: %f, colour: (%f, %f, %f, %f)", iter, processId, startDepth, endDepth, colour);
+                //                debugPrintfEXT("supseg start point so far: %f, and end point: %f", supSegStartPoint, supSegEndPoint);
+                //                debugPrintfEXT("Supseg color so far: (%f, %f, %f, %f)", curV.rgba);
+            }
+            #endif
+
+            if (endDepth == 0.) {
+                #if USE_PRINTF
+                if(gl_GlobalInvocationID.xy == debug_pixel) {
+                    debugPrintfEXT("Setting samples complete to true");
+                }
+                #endif
+                samplesComplete = true;
+            }
+
+            vec4 sample_start_w = ivp_orig * vec4(ndc_x, ndc_y, startDepth, 1);
+            sample_start_w *= 1. / sample_start_w.w;
+            vec4 sample_end_w = ivp_orig * vec4(ndc_x, ndc_y, endDepth, 1);
+            sample_end_w *= 1. / sample_end_w.w;
+
+            float length_in_sample = distance(sample_start_w, sample_end_w);
+
+            float adj_alpha = adjustOpacity(colour.a, length_in_sample);
+
+            adj_alpha = max(adj_alpha, 0.000001);
+
+            if (supersegmentIsOpen) {
+
+                if(startDepth > supSegEndPoint) {
+                    //the next sample/supersegment is actually a transparent sample
+
+                    #if USE_PRINTF
+                    if(gl_GlobalInvocationID.xy == debug_pixel) {
+                        debugPrintfEXT("The next sample is transparent. Sample start: %f and supseg end: %f", startDepth, supSegEndPoint);
+                    }
+                    #endif
+
+                    transparentSample = true;
+
+                    colour = vec4(0);
+                    adj_alpha = 0;
+
+                    endDepth = startDepth;
+                    startDepth = supSegEndPoint;
+                }
+
+                vec4 supseg_start_w = ivp_orig * vec4(ndc_x, ndc_y, supSegStartPoint, 1);
+                supseg_start_w *= 1. / supseg_start_w.w;
+                vec4 supseg_end_w = ivp_orig * vec4(ndc_x, ndc_y, supSegEndPoint, 1);
+                supseg_end_w *= 1. / supseg_end_w.w;
+
+                float segLen = distance(supseg_start_w, supseg_end_w);
+                //                float segLen = distance(supseg_start_w, sample_start_w);
+
+                supersegmentAdjusted.rgb = curV.rgb / curV.a;
+                supersegmentAdjusted.a = adjustOpacity(curV.a, 1.0/segLen);
+
+                vec4 supseg_accumulated;
+                supseg_accumulated.rgb = curV.rgb + (1. - curV.a) * colour.rgb * adj_alpha;
+                supseg_accumulated.a = curV.a + (1. - curV.a) * adj_alpha;
+
+                vec4 accumulated_adjusted;
+                accumulated_adjusted.rgb = supseg_accumulated.rgb / supseg_accumulated.a;
+
+                accumulated_adjusted.a = adjustOpacity(supseg_accumulated.a, 1.0/distance(sample_end_w, supseg_start_w));
+
+                //                float diff = diffPremultiplied(supersegmentAdjusted, accumulated_adjusted);
+                float diff = diffPremultiplied(supersegmentAdjusted, colour);
+
+                //                #if USE_PRINTF
+                //                if (gl_GlobalInvocationID.xy == debug_pixel) {
+                //                    debugPrintfEXT("Diff: %f, threshold: %f", diff, newSupSegThresh);
+                ////                    if(isnan(diff)) {
+                //                        debugPrintfEXT("supsegAdjusted: (%f, %f, %f, %f), acc_adj: (%f, %f, %f, %f). Dist for adjusting: %f", supersegmentAdjusted.xyzw, accumulated_adjusted.xyzw, distance(sample_end_w, supseg_start_w));
+                ////                    }
+                //                }
+                //                #endif
+
+                bool newSupSeg = false;
+                if (diff >= newSupSegThresh) {
+                    newSupSeg = true;
+                    //                    #if USE_PRINTF
+                    //                    if (gl_GlobalInvocationID.xy == debug_pixel && thresh_found) {
+                    //                        debugPrintfEXT("Termination criteria reached for %dth time, color of supseg was: (%f, %f, %f, %f)", num_terminations, supersegmentAdjusted.rgba);
+                    //                        debugPrintfEXT("Before adjusting, opacity was: %f. Length used for opacity correction: %f", curV.a, segLen);
+                    //                    }
+                    //                    #endif
+                }
+
+                if(newSupSeg || samplesComplete) { //closing the current supersegment
+                    num_terminations++;
+                    supersegmentIsOpen = false;
+
+                    if(thresh_found) {
+                        supseg_end_w = ivp_orig * vec4(ndc_x, ndc_y, supSegEndPoint_trunc_trans, 1);
+                        supseg_end_w *= 1. / supseg_end_w.w;
+
+                        float seglen_transparent_truncated = distance(supseg_start_w, supseg_end_w);
+
+                        supersegmentAdjusted.a = adjustOpacity(curV.a, 1.0/seglen_transparent_truncated);
+
+                        #if USE_PRINTF
+                        if(gl_GlobalInvocationID.xy == debug_pixel) {
+                            debugPrintfEXT("Going to write the supseg. Num samples: %d", samplesInSupseg);
+                            debugPrintfEXT("supseg end: %f and truncated end: %f", supSegEndPoint, supSegEndPoint_trunc_trans);
+                        }
+                        #endif
+
+                        writeSupersegment(supersegmentNum, supSegStartPoint, supSegEndPoint_trunc_trans, supersegmentAdjusted);
+                        supersegmentNum++;
+                    }
+                    //TODO: incrementing the empty space skipping grid
+
+
+                } else { // accumulating into the current supersegment
+                    curV = supseg_accumulated;
+                    supSegEndPoint = endDepth; //the end point so far
+                    if(!transparentSample) {
+                        supSegEndPoint_trunc_trans = endDepth;
+                        samplesInSupseg++;
+                    }
+                }
+            }
+
+            if((!supersegmentIsOpen) && (!transparentSample)) {
+                #if USE_PRINTF
+                if(gl_GlobalInvocationID.xy == debug_pixel) {
+                    debugPrintfEXT("Starting a supseg with start: %f and end: %f", startDepth, endDepth);
+                }
+                #endif
+                supSegStartPoint = startDepth;
+                supSegEndPoint = endDepth; //the end point so far
+                supSegEndPoint_trunc_trans = endDepth;
+                curV.rgb = colour.rgb * adj_alpha;
+                curV.a = adj_alpha;
+                supersegmentIsOpen = true;
+                samplesInSupseg++;
+            }
+
+            if(processId != -1 && !transparentSample) {
+                frontSupersegment[processId]++;
+                //                #if USE_PRINTF
+                //                if(gl_GlobalInvocationID.xy == debug_pixel) {
+                //                    debugPrintfEXT("Incrementing the front pointer of process: %d", processId);
+                //                }
+                //                #endif
+            }
+
+        }
+
+        #if USE_PRINTF
+        if(gl_GlobalInvocationID.xy == debug_pixel) {
+            debugPrintfEXT("Iteration: %d of searching for thresh. Low: %f, high: %f, mid: %f. Num terminations: %d", iter, low_thresh, high_thresh, mid_thresh, num_terminations);
+        }
+        #endif
+
+        if(!supsegs_written) {
+            if(abs(high_thresh - low_thresh) < 0.000001) {
+                thresh_found = true;
+                mid_thresh = ((num_terminations == 0) ? low_thresh : high_thresh); // we want to err on the higher side, so that we generate < max no of supsegs, unless we are ending up generating 0 supsegs
+
+                //                #if USE_PRINTF
+                //                if(gl_GlobalInvocationID.xy == debug_pixel) {
+                //                    debugPrintfEXT("Termination criteria reached. Num_terminations: %d. Setting mid_thresh to: %f", num_terminations, mid_thresh);
+                //                }
+                //                #endif
+                //                low_thresh = high_thresh;
+                //                mid_thresh = high_thresh;// we want to err on the higher side, so that we generate < max no of supsegs
+                continue;
+            } else if(num_terminations > desired_supsegs) {
+                low_thresh = mid_thresh;
+            } else if(num_terminations < (desired_supsegs - delta)) {
+                high_thresh = mid_thresh;
+            } else {
+                thresh_found = true;
+                continue;
+            }
+
+            //            if(first_iteration) {
+            //                first_iteration = false;
+            //                if(num_terminations < desired_supsegs) {
+            //                    thresh_found = true;
+            //                    continue;
+            //                }
+            //            }
+
+            mid_thresh = (low_thresh + high_thresh) / 2.0;
+        }
+    }
+
+    if(supersegmentNum < numOutputSupersegments) {
+        for(int i = supersegmentNum; i < numOutputSupersegments; i++) {
+            //If this o/p supersegment could not be written to due to insufficient inputs, make it 0
+            imageStore(CompositedVDIDepth, ivec3(2 * i, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(0));
+            imageStore(CompositedVDIDepth, ivec3(2 * i + 1, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(0));
+            imageStore(CompositedVDIColor, ivec3(i, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(0));
+        }
+    }
+}
