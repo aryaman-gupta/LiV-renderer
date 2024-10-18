@@ -1,5 +1,6 @@
 package graphics.scenery.parallelization
 
+import graphics.scenery.RichNode
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.utils.lazyLogger
@@ -32,6 +33,16 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
     var firstPass = true
     var secondPass = false
     var compositingPass = false
+
+    var compositorNode: RichNode? = null
+
+    open fun setupCompositor() : RichNode? {
+        return null
+    }
+
+    init {
+        compositorNode = setupCompositor()
+    }
 
     open fun getFirstPassData(): ByteBuffer {
         val firstPassTexture = volumeManagerManager.getFirstPassTextureOrNull()!!
