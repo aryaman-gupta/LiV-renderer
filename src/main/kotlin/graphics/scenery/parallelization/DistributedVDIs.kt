@@ -1,5 +1,7 @@
 package graphics.scenery.parallelization
 
+import graphics.scenery.RichNode
+import graphics.scenery.VDICompositorNode
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.textures.Texture
 import net.imglib2.type.numeric.integer.IntType
@@ -27,6 +29,10 @@ class DistributedVDIs(volumeManagerManager: VolumeManagerManager, val windowWidt
     @Suppress("unused")
     private external fun distributeVDIs(subVDIColor: ByteBuffer, subVDIDepth: ByteBuffer, prefixSums: ByteBuffer, supersegmentCounts: IntArray, commSize: Int,
                                         colPointer: Long, depthPointer: Long, prefixPointer: Long, mpiPointer: Long)
+
+    override fun setupCompositor(): RichNode? {
+        return VDICompositorNode(windowWidth, windowHeight, , mpiParameters.commSize)
+    }
 
     override fun processFirstPassData(data: ByteBuffer) {
         // Process first pass data
