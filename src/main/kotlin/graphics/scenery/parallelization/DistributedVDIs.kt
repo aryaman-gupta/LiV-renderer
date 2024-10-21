@@ -1,5 +1,6 @@
 package graphics.scenery.parallelization
 
+import graphics.scenery.Camera
 import graphics.scenery.RichNode
 import graphics.scenery.VDICompositorNode
 import graphics.scenery.VolumeManagerManager
@@ -10,7 +11,7 @@ import org.lwjgl.system.MemoryUtil
 import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 
-class DistributedVDIs(volumeManagerManager: VolumeManagerManager, val windowWidth: Int, val windowHeight: Int, mpiParameters: MPIParameters)
+class DistributedVDIs(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters)
     : DistributedRenderer(volumeManagerManager, mpiParameters) {
 
     override val twoPassRendering = true
@@ -21,6 +22,10 @@ class DistributedVDIs(volumeManagerManager: VolumeManagerManager, val windowWidt
     private var prefixBuffer: ByteBuffer? = null
     private var totalSupersegmentsGenerated = 0
 
+    val windowWidth = volumeManagerManager.getVDIVolumeManager().getVDIWidth()
+    val windowHeight = volumeManagerManager.getVDIVolumeManager().getVDIHeight()
+    val numSupersegments = volumeManagerManager.getVDIVolumeManager().getMaxSupersegments()
+
     var distributeColorPointer: Long = 0L
     var distributeDepthPointer: Long = 0L
     var distributePrefixPointer: Long = 0L
@@ -30,8 +35,8 @@ class DistributedVDIs(volumeManagerManager: VolumeManagerManager, val windowWidt
     private external fun distributeVDIs(subVDIColor: ByteBuffer, subVDIDepth: ByteBuffer, prefixSums: ByteBuffer, supersegmentCounts: IntArray, commSize: Int,
                                         colPointer: Long, depthPointer: Long, prefixPointer: Long, mpiPointer: Long)
 
-    override fun setupCompositor(): RichNode? {
-        return VDICompositorNode(windowWidth, windowHeight, , mpiParameters.commSize)
+    override fun setupCompositor(): VDICompositorNode {
+        return VDICompositorNode(windowWidth, windowHeight, numSupersegments, mpiParameters.commSize)
     }
 
     override fun processFirstPassData(data: ByteBuffer) {
@@ -94,5 +99,13 @@ class DistributedVDIs(volumeManagerManager: VolumeManagerManager, val windowWidt
 
         distributeVDIs(colorBuffer, depthBuffer, prefixBuffer!!, supersegmentCounts, commSize, distributeColorPointer,
             distributeDepthPointer, distributePrefixPointer, mpiPointer)
+    }
+
+    override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera) {
+        // Upload data for compositing
+        val compositor = compositorNode as VDICompositorNode
+
+
+
     }
 }
