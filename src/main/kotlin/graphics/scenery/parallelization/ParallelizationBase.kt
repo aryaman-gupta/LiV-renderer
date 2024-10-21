@@ -1,5 +1,6 @@
 package graphics.scenery.parallelization
 
+import graphics.scenery.Camera
 import graphics.scenery.RichNode
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.utils.extensions.fetchFromGPU
@@ -73,6 +74,10 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
 
     abstract fun distributeForCompositing(buffers: List<ByteBuffer>)
 
+    open fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera) {
+        // Override to upload data and update necessary camera parameters for compositing
+    }
+
     fun postRender() {
 
         if(!twoPassRendering) {
@@ -144,6 +149,7 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
                 }
 
                 distributeForCompositing(buffersToDistribute)
+                // the distribute code will then call the [uploadForCompositing] function which will upload the data necessary for compositing
 
                 if(explicitCompositingStep) {
                     secondPass = false
@@ -158,7 +164,10 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
         }
 
         if(explicitCompositingStep && compositingPass) {
-
+            // The compositing pass just completed
+            compositingPass = false
+            firstPass = true
+            volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
         }
 
     }
