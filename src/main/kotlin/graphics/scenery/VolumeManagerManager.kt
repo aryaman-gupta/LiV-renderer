@@ -16,6 +16,7 @@ class VolumeManagerManager (var hub: Hub) {
     val NUM_LAYERS = 2
 
     private lateinit var volumeManager: VolumeManager
+    private var vdiVolumeManager: VDIVolumeManager? = null
     private var firstPassTexture: Texture? = null
     private var colorTexture: Texture? = null
     private var depthTexture: Texture? = null
@@ -37,6 +38,15 @@ class VolumeManagerManager (var hub: Hub) {
         return volumeManager
         } else {
             throw UninitializedPropertyAccessException("VolumeManager has not been instantiated")
+        }
+    }
+
+    fun getVDIVolumeManager(): VDIVolumeManager {
+        if (vdiVolumeManager != null) {
+            return vdiVolumeManager!!
+        } else {
+            throw UninitializedPropertyAccessException("VDIVolumeManager not found. " +
+                    "VolumeManager needs to be instantiated with VDI output type.")
         }
     }
 
@@ -135,13 +145,13 @@ class VolumeManagerManager (var hub: Hub) {
             colorTexture = volumeManager.material().textures["LayeredColors"]
             depthTexture = volumeManager.material().textures["LayeredDepths"]
         } else if (outputType == OutputType.VDI) {
-            val vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
+            vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
             volumeManager = vdiVolumeManager.createVDIVolumeManager(vdiFull = false)
             colorTexture = vdiVolumeManager.getColorTextureOrNull()
             depthTexture = vdiVolumeManager.getDepthTextureOrNull()
             firstPassTexture = vdiVolumeManager.getNumGeneratedTextureOrNull()
         } else if (outputType == OutputType.TEST_VDI_FULL) {
-            val vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
+            vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
             volumeManager = vdiVolumeManager.createVDIVolumeManager(vdiFull = true)
             colorTexture = vdiVolumeManager.getColorTextureOrNull()
             depthTexture = vdiVolumeManager.getDepthTextureOrNull()
