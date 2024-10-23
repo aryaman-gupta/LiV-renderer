@@ -74,8 +74,18 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
 
     abstract fun distributeForCompositing(buffers: List<ByteBuffer>)
 
-    open fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera) {
+    open fun uploadForCompositing(cam: Camera, buffersToUpload: List<ByteBuffer>, camera: Camera, colorCounts: IntArray, depthCounts: IntArray) {
         // Override to upload data and update necessary camera parameters for compositing
+    }
+
+    /**
+     * Set the compositor activity status. If the parallel execution strategy contains an explicit compositing pass, this
+     * function should be overridden to activate or deactivate the compositing shader based on the value of [setTo].
+     *
+     * @param setTo Boolean value to set the compositor activity status to.
+     */
+    open fun setCompositorActivityStatus(setTo: Boolean) {
+
     }
 
     fun postRender() {
@@ -154,6 +164,7 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
                 if(explicitCompositingStep) {
                     secondPass = false
                     compositingPass = true
+                    setCompositorActivityStatus(true)
                     volumeManagerManager.getVolumeManager().shaderProperties[secondPassFlag] = false
                 } else {
                     secondPass = false
@@ -166,6 +177,7 @@ abstract class DistributedRenderer(var volumeManagerManager: VolumeManagerManage
         if(explicitCompositingStep && compositingPass) {
             // The compositing pass just completed
             compositingPass = false
+            setCompositorActivityStatus(false)
             firstPass = true
             volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
         }
