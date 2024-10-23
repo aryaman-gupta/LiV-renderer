@@ -1,7 +1,6 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
-import graphics.scenery.RichNode
 import graphics.scenery.VDICompositorNode
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.textures.Texture
@@ -15,7 +14,7 @@ import kotlin.system.measureNanoTime
 import kotlin.math.ceil
 
 class DistributedVDIs(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters)
-    : DistributedRenderer(volumeManagerManager, mpiParameters) {
+    : ParallelizationBase(volumeManagerManager, mpiParameters) {
 
     override val twoPassRendering = true
 
@@ -104,7 +103,7 @@ class DistributedVDIs(volumeManagerManager: VolumeManagerManager, mpiParameters:
             distributeDepthPointer, distributePrefixPointer, mpiPointer)
     }
 
-    override fun uploadForCompositing(cam: Camera, buffersToUpload: List<ByteBuffer>, camera: Camera, colorCounts: IntArray, depthCounts: IntArray) {
+    override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, colorCounts: IntArray, depthCounts: IntArray) {
         // Upload data for compositing
         val compositor = compositorNode as VDICompositorNode
 
@@ -135,7 +134,7 @@ class DistributedVDIs(volumeManagerManager: VolumeManagerManager, mpiParameters:
             type = IntType(), mipmap = false, minFilter = Texture.FilteringMode.NearestNeighbour, maxFilter = Texture.FilteringMode.NearestNeighbour
         )
 
-        val view = cam.spatial().getTransformation()
+        val view = camera.spatial().getTransformation()
         compositor.ViewOriginal = view
         compositor.invViewOriginal = Matrix4f(view).invert()
 
