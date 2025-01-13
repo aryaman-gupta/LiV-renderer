@@ -1,6 +1,7 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.VolumeManagerManager
+import graphics.scenery.natives.IceTWrapper
 import java.nio.ByteBuffer
 
 class ConvexVolumes(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters) : ParallelizationBase (volumeManagerManager, mpiParameters) {
@@ -8,9 +9,16 @@ class ConvexVolumes(volumeManagerManager: VolumeManagerManager, mpiParameters: M
     override val twoPassRendering = false
     override val explicitCompositingStep = false
 
-    override fun distributeForCompositing(buffers: List<ByteBuffer>) {
-        // call the ICET composite image function
+    val nativeContext = IceTWrapper.createNativeContext()
+
+    init {
+        IceTWrapper.setupICET()
     }
 
+
+    override fun distributeForCompositing(buffers: List<ByteBuffer>) {
+        // call the ICET composite image function
+        IceTWrapper.compositeFrame()
+    }
 
 }
