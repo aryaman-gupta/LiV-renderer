@@ -146,15 +146,15 @@ class VolumeManagerManager (var hub: Hub) {
             depthTexture = volumeManager.material().textures["LayeredDepths"]
         } else if (outputType == OutputType.VDI) {
             vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
-            volumeManager = vdiVolumeManager.createVDIVolumeManager(vdiFull = false)
-            colorTexture = vdiVolumeManager.getColorTextureOrNull()
-            depthTexture = vdiVolumeManager.getDepthTextureOrNull()
-            firstPassTexture = vdiVolumeManager.getNumGeneratedTextureOrNull()
+            volumeManager = vdiVolumeManager!!.createVDIVolumeManager(vdiFull = false)
+            colorTexture = vdiVolumeManager!!.getColorTextureOrNull()
+            depthTexture = vdiVolumeManager!!.getDepthTextureOrNull()
+            firstPassTexture = vdiVolumeManager!!.getNumGeneratedTextureOrNull()
         } else if (outputType == OutputType.TEST_VDI_FULL) {
             vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
-            volumeManager = vdiVolumeManager.createVDIVolumeManager(vdiFull = true)
-            colorTexture = vdiVolumeManager.getColorTextureOrNull()
-            depthTexture = vdiVolumeManager.getDepthTextureOrNull()
+            volumeManager = vdiVolumeManager!!.createVDIVolumeManager(vdiFull = true)
+            colorTexture = vdiVolumeManager!!.getColorTextureOrNull()
+            depthTexture = vdiVolumeManager!!.getDepthTextureOrNull()
         }
         hub.add(volumeManager)
     }
