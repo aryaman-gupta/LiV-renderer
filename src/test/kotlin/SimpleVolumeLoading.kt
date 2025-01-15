@@ -1,15 +1,12 @@
 package graphics.scenery.tests
 
-import graphics.scenery.DistributedVolumeRenderer
-import graphics.scenery.SceneryElement
-import graphics.scenery.backends.Renderer
+import graphics.scenery.tests.interfaces.NaiveInterface
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
-import kotlin.math.log
 
 fun main() {
     // Initialize the renderer
-    val instance = DistributedVolumeRenderer(1280, 720)
+    val instance = NaiveInterface(1280, 720)
 
     thread {
         instance.main()
@@ -22,19 +19,17 @@ fun main() {
 
     // Set the volume dimensions
     val volumeDims = intArrayOf(128, 128, 256)
-    instance.setVolumeDims(volumeDims)
+    instance.setVolumeDimensions(volumeDims)
 
-    val pixelToWorld = 3.84f/256f
-
-    instance.pixelToWorld = pixelToWorld
+    val scaling = instance.getVolumeScaling()
 
     // Add a volume
     val volumePosition = floatArrayOf(0.0f, 0.0f, 0.0f)
     val is16bit = false
     instance.addVolume(0, volumeDims, volumePosition, is16bit)
-    instance.addVolume(1, volumeDims, floatArrayOf(128f * pixelToWorld, 0f, 0f), is16bit)
-    instance.addVolume(2, volumeDims, floatArrayOf(0f, -128f * pixelToWorld, 0f), is16bit)
-    instance.addVolume(3, volumeDims, floatArrayOf(128f * pixelToWorld, -128f * pixelToWorld, 0f), is16bit)
+    instance.addVolume(1, volumeDims, floatArrayOf(128f * scaling, 0f, 0f), is16bit)
+    instance.addVolume(2, volumeDims, floatArrayOf(0f, -128f * scaling, 0f), is16bit)
+    instance.addVolume(3, volumeDims, floatArrayOf(128f * scaling, -128f * scaling, 0f), is16bit)
 
     // Create a buffer to update the volume
     val bufferSize = volumeDims[0] * volumeDims[1] * volumeDims[2]
@@ -64,12 +59,12 @@ fun main() {
     instance.updateVolume(2, buffer3)
     instance.updateVolume(3, buffer4)
 
-
-    instance.rendererConfigured = true
+    instance.sceneSetupComplete.set(true)
 
     // Start the rendering loop
     while (true) {
         // Perform rendering tasks
         Thread.sleep(10000)
+        instance.stopRendering()
     }
 }
