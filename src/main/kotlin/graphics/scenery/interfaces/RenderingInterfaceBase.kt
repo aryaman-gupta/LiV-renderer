@@ -6,6 +6,7 @@ import graphics.scenery.Origin
 import graphics.scenery.SceneryBase
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
+import graphics.scenery.parallelization.ParallelizationBase
 import graphics.scenery.volumes.BufferedVolume
 import graphics.scenery.volumes.Colormap
 import graphics.scenery.volumes.TransferFunction
@@ -33,6 +34,12 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
 
     lateinit var volumeManagerManager: VolumeManagerManager
     val volumeDimensionsInitialized = AtomicBoolean(false)
+
+    abstract val parallelizationScheme: ParallelizationBase
+
+    var commSize = 1
+    var rank = 0
+    var nodeRank = 0
 
     /**
      * Blocks until the renderer is instantiated and initialized.
@@ -66,6 +73,7 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
     }
 
     fun getVolumeScaling(): Float {
+
         return pixelToWorld
     }
 
