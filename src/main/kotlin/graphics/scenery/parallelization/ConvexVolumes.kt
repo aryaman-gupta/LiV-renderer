@@ -12,13 +12,13 @@ class ConvexVolumes(volumeManagerManager: VolumeManagerManager, mpiParameters: M
     val nativeContext = IceTWrapper.createNativeContext()
 
     init {
-        IceTWrapper.setupICET()
+//        IceTWrapper.setupICET()
     }
 
 
     override fun distributeForCompositing(buffers: List<ByteBuffer>) {
         // call the ICET composite image function
-        IceTWrapper.compositeFrame()
+//        IceTWrapper.compositeFrame()
     }
 
 }
