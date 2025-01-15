@@ -47,7 +47,7 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
     var commSize = 1
     var rank = 0
     var nodeRank = 0
-    var rendererConfigured = false
+    var rendererConfigured = AtomicBoolean(false)
 
     var imagePointer = 0L
     var mpiPointer = 0L
@@ -182,7 +182,7 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
             scene.addChild(light)
         }
 
-        while (!rendererConfigured) {
+        while (!rendererConfigured.get()) {
             Thread.sleep(50)
         }
 
@@ -217,7 +217,7 @@ class DistributedVolumeRenderer(val wWidth: Int, val wHeight: Int) : SceneryBase
             Thread.sleep(50)
         }
 
-        while (!rendererConfigured) {
+        while (!rendererConfigured.get()) {
             Thread.sleep(50)
         }
         var cnt = 0
