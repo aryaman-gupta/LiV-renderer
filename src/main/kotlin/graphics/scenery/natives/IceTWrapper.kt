@@ -13,7 +13,7 @@ object IceTWrapper {
     external fun setupICET(handle: Long, width: Int, height: Int)
 
     // Set centroids
-    external fun setCentroids(handle: Long, positions: Array<FloatArray>)
+    external fun setProcessorCentroid(handle: Long, processorID: Int, positions: FloatArray)
 
     // Composite
     external fun compositeFrame(
