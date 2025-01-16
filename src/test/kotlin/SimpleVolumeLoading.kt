@@ -6,7 +6,7 @@ import kotlin.concurrent.thread
 
 fun main() {
     // Initialize the renderer
-    val instance = NaiveInterface(1280, 720)
+    val instance = NaiveInterface(1280, 720, 0, 1, 0)
 
     thread {
         instance.main()
