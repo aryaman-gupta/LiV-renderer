@@ -13,7 +13,7 @@ import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 import kotlin.math.ceil
 
-class DistributedVDIs(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters)
+class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters)
     : ParallelizationBase(volumeManagerManager, mpiParameters) {
 
     override val twoPassRendering = true

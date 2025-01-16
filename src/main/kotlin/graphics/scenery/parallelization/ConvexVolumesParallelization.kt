@@ -4,7 +4,7 @@ import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.IceTWrapper
 import java.nio.ByteBuffer
 
-class ConvexVolumes(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters) : ParallelizationBase (volumeManagerManager, mpiParameters) {
+class ConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters) : ParallelizationBase (volumeManagerManager, mpiParameters) {
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false
