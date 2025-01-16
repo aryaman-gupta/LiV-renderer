@@ -3,9 +3,11 @@ package graphics.scenery.parallelization
 import graphics.scenery.Camera
 import graphics.scenery.RichNode
 import graphics.scenery.VolumeManagerManager
+import graphics.scenery.backends.Renderer
 import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.utils.lazyLogger
 import java.nio.ByteBuffer
+import kotlin.system.exitProcess
 
 /**
  * Data class representing MPI (Message Passing Interface) parameters.
@@ -26,7 +28,7 @@ data class MPIParameters(
  * @property volumeManagerManager The manager responsible for handling volume data.
  * @property mpiParameters The MPI parameters for the current process.
  */
-abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManager, val mpiParameters: MPIParameters) {
+abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManager, val mpiParameters: MPIParameters, val camera: Camera) {
 
     val logger by lazyLogger()
 
@@ -42,6 +44,9 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
     var compositorNode: RichNode? = null
 
+    protected open var windowWidth: Int = 0
+    protected open var windowHeight: Int = 0
+
     /**
      * Sets up the compositor node. Only called if the derived class sets [explicitCompositingStep] to true.
      *
@@ -53,6 +58,19 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
     init {
         compositorNode = setupCompositor()
+
+        volumeManagerManager.getVolumeManager().hub?.let {
+            it.get<Renderer>()?.let { renderer ->
+                windowWidth = renderer.window.width
+                windowHeight = renderer.window.height
+            } ?: run {
+                throw RuntimeException("Please ensure that the ParallelizationBase class is initialized after the Renderer, with" +
+                        "a valid and initialized VolumeManagerManager")
+            }
+        } ?: run {
+            throw RuntimeException("Please ensure that the ParallelizationBase class is initialized after the Renderer, with" +
+                    "a valid and initialized VolumeManagerManager")
+        }
     }
 
     /**
