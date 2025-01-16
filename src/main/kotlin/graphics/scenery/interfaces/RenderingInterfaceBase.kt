@@ -6,6 +6,7 @@ import graphics.scenery.Origin
 import graphics.scenery.SceneryBase
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
+import graphics.scenery.parallelization.MPIParameters
 import graphics.scenery.parallelization.ParallelizationBase
 import graphics.scenery.volumes.BufferedVolume
 import graphics.scenery.volumes.Colormap
@@ -15,13 +16,12 @@ import net.imglib2.type.numeric.integer.UnsignedByteType
 import net.imglib2.type.numeric.integer.UnsignedShortType
 import org.joml.Quaternionf
 import org.joml.Vector3f
-import org.joml.Vector3i
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
-abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int, windowHeight: Int) : SceneryBase(applicationName, windowWidth, windowHeight) {
+abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int, windowHeight: Int, rank: Int, commSize: Int, nodeRank: Int) : SceneryBase(applicationName, windowWidth, windowHeight) {
 
     var volumes: HashMap<Int, BufferedVolume?> = java.util.HashMap()
     var volumeManagerInitialized = AtomicBoolean(false)
@@ -30,16 +30,14 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
 
     private var volumeDimensions: IntArray = intArrayOf(0, 0, 0)
 
-    private var pixelToWorld = 0.001f
+    protected var pixelToWorld = 0.001f
 
     lateinit var volumeManagerManager: VolumeManagerManager
     val volumeDimensionsInitialized = AtomicBoolean(false)
 
-    abstract val parallelizationScheme: ParallelizationBase
+    lateinit var parallelizationScheme: ParallelizationBase
 
-    var commSize = 1
-    var rank = 0
-    var nodeRank = 0
+    val mpiParameters = MPIParameters(rank, commSize, nodeRank)
 
     /**
      * Blocks until the renderer is instantiated and initialized.
@@ -133,6 +131,8 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
 
     abstract fun setupVolumeManagerManager()
 
+    abstract fun initializeParallelizationScheme(camera: Camera): ParallelizationBase
+
     open fun additionalSceneSetup() {}
 
     open fun runAsynchronously() {}
@@ -154,11 +154,15 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         }
         scene.addChild(cam)
 
+        parallelizationScheme = initializeParallelizationScheme(cam)
+
         additionalSceneSetup()
 
         while (!sceneSetupComplete.get()) {
             Thread.sleep(50)
         }
+
+        renderer!!.runAfterRendering.add { parallelizationScheme.postRender() }
 
         thread {
             while (renderer?.firstImageReady == false) {
