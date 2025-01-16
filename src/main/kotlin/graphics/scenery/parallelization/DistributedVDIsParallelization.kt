@@ -13,8 +13,8 @@ import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 import kotlin.math.ceil
 
-class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters)
-    : ParallelizationBase(volumeManagerManager, mpiParameters) {
+class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera)
+    : ParallelizationBase(volumeManagerManager, mpiParameters, camera) {
 
     override val twoPassRendering = true
 
@@ -24,8 +24,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     private var prefixBuffer: ByteBuffer? = null
     private var totalSupersegmentsGenerated = 0
 
-    val windowWidth = volumeManagerManager.getVDIVolumeManager().getVDIWidth()
-    val windowHeight = volumeManagerManager.getVDIVolumeManager().getVDIHeight()
+    override var windowWidth = volumeManagerManager.getVDIVolumeManager().getVDIWidth()
+    override var windowHeight = volumeManagerManager.getVDIVolumeManager().getVDIHeight()
     val numSupersegments = volumeManagerManager.getVDIVolumeManager().getMaxSupersegments()
 
     var distributeColorPointer: Long = 0L
