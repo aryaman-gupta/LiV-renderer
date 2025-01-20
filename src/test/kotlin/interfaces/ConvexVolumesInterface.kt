@@ -23,8 +23,9 @@ class ConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int
     }
 
     override fun setupVolumeManagerManager() {
+        volumeManagerManager = VolumeManagerManager(hub)
         volumeManagerManager.instantiateVolumeManager(
-            VolumeManagerManager.OutputType.LAYERED_IMAGE,
+            VolumeManagerManager.OutputType.REGULAR_IMAGE,
             windowWidth, windowHeight,
             scene
         )
@@ -33,7 +34,7 @@ class ConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int
     override fun additionalSceneSetup() {
         if (processorOrigins.size != mpiParameters.commSize || processorDimensions.size != mpiParameters.commSize) {
             throw IllegalArgumentException("For rendering simple (i.e. convex) volume decompositions, please provide the origin and dimensions of the data for each processor" +
-                    "using the addProcessorData method.")
+                    " using the addProcessorData method.")
         }
 
         //calculate centroids of each processor
