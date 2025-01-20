@@ -1,8 +1,10 @@
 package graphics.scenery.natives
 
+import java.nio.ByteBuffer
+
 object IceTWrapper {
     init {
-        System.loadLibrary("icetwrapper")  // Your .so/.dylib name
+        System.loadLibrary("IceTJNIBridge")
     }
 
     // Create/destroy
@@ -22,5 +24,5 @@ object IceTWrapper {
         camPos: FloatArray,
         width: Int,
         height: Int
-    )
+    ) : ByteBuffer?
 }
