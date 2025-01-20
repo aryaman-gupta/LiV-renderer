@@ -34,7 +34,13 @@ class ConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, m
         cameraPosition[1] = camera.spatial().position.y
         cameraPosition[2] = camera.spatial().position.z
 
-        IceTWrapper.compositeFrame(nativeContext, buffers[0], cameraPosition, windowWidth, windowHeight)
-    }
+        val compositedColors = IceTWrapper.compositeFrame(nativeContext, buffers[0], cameraPosition, windowWidth, windowHeight)
 
+        if (isRootProcess()) {
+            // put the composited colors into the final composited buffer list
+            compositedColors?.let {
+                finalCompositedBuffers.add(compositedColors)
+            }
+        }
+    }
 }
