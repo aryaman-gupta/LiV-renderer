@@ -9,6 +9,8 @@ import graphics.scenery.parallelization.TestParallelization
 
 class NaiveInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int, nodeRank: Int) : RenderingInterfaceBase("NaiveInterface", wWidth, wHeight, rank, commSize, nodeRank) {
 
+    override var outputProcessingType = OutputProcessingType.DISPLAY
+
     override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
         return TestParallelization(volumeManagerManager, mpiParameters, camera)
     }
@@ -17,12 +19,6 @@ class NaiveInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int, nodeRa
         volumeManagerManager = VolumeManagerManager(hub)
         volumeManagerManager.instantiateVolumeManager(VolumeManagerManager.OutputType.REGULAR_IMAGE,
             windowWidth, windowHeight, scene)
-    }
-
-    override fun additionalSceneSetup() {
-        val plane = FullscreenObject()
-        scene.addChild(plane)
-        plane.material().textures["diffuse"] = volumeManagerManager.getColorTextureOrNull()!!
     }
 
     override fun runAsynchronously() {
