@@ -2,6 +2,7 @@ package graphics.scenery.interfaces
 
 import graphics.scenery.Camera
 import graphics.scenery.DetachedHeadCamera
+import graphics.scenery.FullscreenObject
 import graphics.scenery.Origin
 import graphics.scenery.SceneryBase
 import graphics.scenery.VolumeManagerManager
@@ -37,7 +38,22 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
 
     lateinit var parallelizationScheme: ParallelizationBase
 
+    var plane: FullscreenObject? = null
     val mpiParameters = MPIParameters(rank, commSize, nodeRank)
+
+    /**
+     * Enum class representing the type of processing that will be applied to the final composited output.
+     *
+     * STREAM: The composited output will be streamed to a remote display.
+     * SAVE_TO_DISK: The composited output will be saved to disk.
+     * DISPLAY: The composited output will be displayed on the server machine.
+     * STREAM_AND_SAVE: The composited output will be streamed to a remote display and saved to disk.
+     */
+    enum class OutputProcessingType {
+        STREAM, SAVE_TO_DISK, DISPLAY, STREAM_AND_SAVE, NONE
+    }
+
+    abstract var outputProcessingType: OutputProcessingType
 
     /**
      * Blocks until the renderer is instantiated and initialized.
@@ -156,6 +172,19 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
 
         parallelizationScheme = initializeParallelizationScheme(cam)
 
+        if (outputProcessingType == OutputProcessingType.DISPLAY) {
+            plane = FullscreenObject()
+            scene.addChild(plane!!)
+            parallelizationScheme.setDisplayGeneratedData(plane!!)
+        } else if (outputProcessingType == OutputProcessingType.SAVE_TO_DISK) {
+            parallelizationScheme.saveGeneratedData = true
+        } else if (outputProcessingType == OutputProcessingType.STREAM) {
+            parallelizationScheme.streamGeneratedData = true
+        } else if (outputProcessingType == OutputProcessingType.STREAM_AND_SAVE) {
+            parallelizationScheme.streamGeneratedData = true
+            parallelizationScheme.saveGeneratedData = true
+        }
+
         additionalSceneSetup()
 
         while (!sceneSetupComplete.get()) {
@@ -163,6 +192,7 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         }
 
         renderer!!.runAfterRendering.add { parallelizationScheme.postRender() }
+        renderer!!.runAfterRendering.add { parallelizationScheme.processCompositedOutput() }
 
         thread {
             while (renderer?.firstImageReady == false) {
