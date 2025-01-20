@@ -27,6 +27,8 @@ dependencies {
     // necessary for logging to work correctly, adjust to the logging
     // framework of your liking
     runtimeOnly("org.slf4j:slf4j-simple:1.7.30")
+    testImplementation("org.mockito:mockito-core:4.0.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.8.2")
 }
 
 application {
