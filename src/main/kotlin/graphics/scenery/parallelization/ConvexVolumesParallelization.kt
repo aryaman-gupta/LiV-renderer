@@ -26,7 +26,7 @@ class ConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, m
         // call the ICET composite image function
 
         if (buffers.size != 1) {
-            throw IllegalArgumentException("Expected exactly one buffer")
+            throw IllegalArgumentException("Expected exactly one buffer but got ${buffers.size}")
         }
 
         val cameraPosition = FloatArray(3)
