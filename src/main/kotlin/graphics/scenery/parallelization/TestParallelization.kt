@@ -10,6 +10,11 @@ class TestParallelization(volumeManagerManager: VolumeManagerManager, mpiParamet
     override val explicitCompositingStep = false
 
     override fun distributeForCompositing(buffers: List<ByteBuffer>) {
-        // do nothing
+        // simply add the color buffer to the final composited buffers
+        if (buffers.size != 1) {
+            throw IllegalArgumentException("Expected exactly one buffer but got ${buffers.size}")
+        }
+
+        finalCompositedBuffers.add(buffers[0])
     }
 }
