@@ -11,9 +11,6 @@ fun main() {
 
     thread {
         instance.main()
-
-        //wait for some time
-        Thread.sleep(100000)
     }
 
     instance.waitRendererReady()
