@@ -7,6 +7,8 @@ import graphics.scenery.Origin
 import graphics.scenery.SceneryBase
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
+import graphics.scenery.benchmarks.BenchmarkSetup
+import graphics.scenery.benchmarks.BenchmarkSetup.Dataset
 import graphics.scenery.parallelization.MPIParameters
 import graphics.scenery.parallelization.ParallelizationBase
 import graphics.scenery.volumes.BufferedVolume
@@ -104,23 +106,36 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             Thread.sleep(50)
         }
 
+        val benchmarkDataset = System.getProperty("liv-renderer.BenchmarkDataset")
+
+        if(benchmarkDataset != null) {
+            logger.info("Benchmark Dataset: $benchmarkDataset")
+        }
+
         val volume = if (is16bit) {
             Volume.fromBuffer(emptyList(), dimensions[0], dimensions[1], dimensions[2], UnsignedShortType(), hub)
         } else {
             Volume.fromBuffer(emptyList(), dimensions[0], dimensions[1], dimensions[2], UnsignedByteType(), hub)
         }
-        volume.origin = Origin.FrontBottomLeft
+        volume.origin = Origin.Center
         volume.spatial().position = Vector3f(pos[0], pos[1], pos[2])
 
         volume.spatial().needsUpdate = true
-        volume.colormap = Colormap.get("rb-darker")
+        if(benchmarkDataset != null) {
+            BenchmarkSetup(Dataset.valueOf(benchmarkDataset)).setColorMap(volume)
+        } else {
+            volume.colormap = Colormap.get("rb-darker")
+        }
         volume.pixelToWorldRatio = pixelToWorld
 
-        val tf = TransferFunction.ramp(0.0f, 1.0f, 1.0f)
+        if(benchmarkDataset != null) {
+            volume.transferFunction = BenchmarkSetup(Dataset.valueOf(benchmarkDataset)).setupTransferFunction()
+        } else {
+            val tf = TransferFunction.ramp(0.0f, 1.0f, 1.0f)
+            volume.transferFunction = tf
+        }
 
         volume.name = "volume"
-
-        volume.transferFunction = tf
 
         scene.addChild(volume)
 
@@ -154,13 +169,21 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         volumeManagerInitialized.set(true)
 
         val cam: Camera = DetachedHeadCamera()
-        with(cam) {
-            spatial().position = Vector3f(-2.300E+0f, -6.402E+0f, 1.100E+0f)
-            spatial().rotation = Quaternionf(2.495E-1, -7.098E-1, 3.027E-1, -5.851E-1)
 
-            perspectiveCamera(50.0f, windowWidth, windowHeight)
-            cam.farPlaneDistance = 20.0f
+        val benchmarkDataset = System.getProperty("liv-renderer.BenchmarkDataset")
+
+        if(benchmarkDataset != null) {
+            BenchmarkSetup(Dataset.valueOf(benchmarkDataset)).positionCamera(cam)
+        } else {
+            with(cam) {
+                spatial().position = Vector3f(-2.300E+0f, -6.402E+0f, 1.100E+0f)
+                spatial().rotation = Quaternionf(2.495E-1, -7.098E-1, 3.027E-1, -5.851E-1)
+
+                perspectiveCamera(50.0f, windowWidth, windowHeight)
+                cam.farPlaneDistance = 20.0f
+            }
         }
+
         scene.addChild(cam)
 
         parallelizationScheme = initializeParallelizationScheme(cam)
