@@ -116,14 +116,7 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         volume.colormap = Colormap.get("rb-darker")
         volume.pixelToWorldRatio = pixelToWorld
 
-        val tf = TransferFunction()
-
-        with(tf) {
-            addControlPoint(0.18f, 0.28f)
-            addControlPoint(0.6f, 0.3f)
-            addControlPoint(0.88f, 0.4f)
-            addControlPoint(1f, 0.5f)
-        }
+        val tf = TransferFunction.ramp(0.0f, 1.0f, 1.0f)
 
         volume.name = "volume"
 
