@@ -85,7 +85,7 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         volumeDimensions = dims
         volumeDimensionsInitialized.set(true)
 
-        pixelToWorld = 3.84f / volumeDimensions[2] // empirically found to work reasonably
+        pixelToWorld = 3.84f / volumeDimensions[0] // empirically found to work reasonably
     }
 
     fun getVolumeScaling(): Float {
