@@ -117,7 +117,7 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         } else {
             Volume.fromBuffer(emptyList(), dimensions[0], dimensions[1], dimensions[2], UnsignedByteType(), hub)
         }
-        volume.origin = Origin.Center
+        volume.origin = Origin.FrontBottomLeft
         volume.spatial().position = Vector3f(pos[0], pos[1], pos[2])
 
         volume.spatial().needsUpdate = true
@@ -183,11 +183,11 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             with(cam) {
                 spatial().position = Vector3f(-2.300E+0f, -6.402E+0f, 1.100E+0f)
                 spatial().rotation = Quaternionf(2.495E-1, -7.098E-1, 3.027E-1, -5.851E-1)
-
-                perspectiveCamera(50.0f, windowWidth, windowHeight)
-                cam.farPlaneDistance = 20.0f
             }
         }
+
+        cam.perspectiveCamera(50.0f, windowWidth, windowHeight)
+        cam.farPlaneDistance = 20.0f
 
         scene.addChild(cam)
 
