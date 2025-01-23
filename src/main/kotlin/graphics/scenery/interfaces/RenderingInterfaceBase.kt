@@ -148,9 +148,14 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             logger.info("Waiting for volume $volumeId to be created")
             Thread.sleep(50)
         }
-        logger.info("Volume $volumeId has been updated")
+
+        if(buffer.remaining() == 0) {
+            IllegalArgumentException("updateVolume called with empty buffer for volume $volumeId")
+        }
+
         volumes[volumeId]?.addTimepoint("t", buffer)
         volumes[volumeId]?.goToLastTimepoint()
+        logger.info("Volume $volumeId has been updated")
     }
 
     abstract fun setupVolumeManagerManager()
