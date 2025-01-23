@@ -18,7 +18,7 @@ fun main() {
     instance.waitRendererReady()
 
     // Set the volume dimensions
-    val volumeDims = intArrayOf(128, 128, 256)
+    val volumeDims = intArrayOf(256, 128, 128)
     instance.setVolumeDimensions(volumeDims)
 
     val scaling = instance.getVolumeScaling()
@@ -45,7 +45,7 @@ fun main() {
 
     val buffer3 = ByteBuffer.allocateDirect(bufferSize)
     for (i in 0 until bufferSize) {
-        buffer3.put(i, (0).toByte())
+        buffer3.put(i, (50).toByte())
     }
 
     val buffer4 = ByteBuffer.allocateDirect(bufferSize)
