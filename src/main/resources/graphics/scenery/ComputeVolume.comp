@@ -79,13 +79,20 @@ uniform float stepsPerVoxel;
 
 void main()
 {
-    bool fixedStepSizeLocal = true;
-    float stepsPerVoxelLocal = 1.0f;
+    bool fixedStepSizeLocal = fixedStepSize;
+    float stepsPerVoxelLocal = stepsPerVoxel;
 
     bool debug_pixel = false;
     if(gl_GlobalInvocationID.xy == ivec2(760, 510)) {
         debug_pixel = true;
     }
+
+    #if USE_PRINTF
+    if(debug_pixel) {
+        debugPrintfEXT("Value of fixedStepSize: %d", fixedStepSize);
+        debugPrintfEXT("Value of stepsPerVoxel: %f", stepsPerVoxel);
+    }
+    #endif
 
     mat4 ipv = InverseViewMatrices[0] * InverseProjectionMatrix;
     // frag coord in NDC
@@ -186,8 +193,8 @@ void main()
                 step += nw + step * fwnw;
             }
         }
-//        v.xyz = pow(v.xyz, vec3(1/2.2));
-        v.rgb *= v.a;
+        v.xyz = pow(v.xyz, vec3(1/2.2));
+//        v.rgb *= v.a;
         #if USE_PRINTF
         if(debug_pixel) {
             debugPrintfEXT("Final color: (%f, %f, %f, %f)", v.rgba);
