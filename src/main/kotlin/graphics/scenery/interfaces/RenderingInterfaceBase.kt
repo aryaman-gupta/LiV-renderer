@@ -73,6 +73,13 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         renderer?.shouldClose = true
     }
 
+    /**
+     * Sets the dimensions of the overall volume being rendered by the parallel rendering application, i.e.,
+     * the combination of all domains that will be rendered by the individual processes. This function needs to be
+     * called before adding any volumes to the scene.
+     *
+     * @param dims The dimensions of the overall volume as a 3-element array.
+     */
     fun setVolumeDimensions(dims: IntArray) {
         if (dims.size != 3) {
             logger.error("Volume dimensions must be a 3-element array")
@@ -91,6 +98,16 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
     fun getVolumeScaling(): Float {
 
         return pixelToWorld
+    }
+
+    private fun getVolumeSize(volumeID: Int): Int {
+        if(!volumes.containsKey(volumeID)) {
+            throw IllegalArgumentException("Volume with ID $volumeID does not exist")
+            return 0
+        } else {
+            val dimensions = volumes[volumeID]!!.getDimensions()
+            return dimensions.x * dimensions.y * dimensions.z
+        }
     }
 
     open fun addVolume(volumeID: Int, dimensions: IntArray, pos: FloatArray, is16bit: Boolean) {
@@ -149,8 +166,9 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             Thread.sleep(50)
         }
 
-        if(buffer.remaining() == 0) {
-            IllegalArgumentException("updateVolume called with empty buffer for volume $volumeId")
+        if(buffer.remaining() != getVolumeSize(volumeId)) {
+            IllegalArgumentException("updateVolume called with a buffer of incorrect size for $volumeId. " +
+                    "Expected ${getVolumeSize(volumeId)} bytes, got ${buffer.remaining()} bytes")
         }
 
         volumes[volumeId]?.addTimepoint("t", buffer)
