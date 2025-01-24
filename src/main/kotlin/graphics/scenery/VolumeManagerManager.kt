@@ -125,6 +125,11 @@ class VolumeManagerManager (var hub: Hub) {
             volumeManager.material().textures["OutputRender"] = outputTexture
 
             colorTexture = volumeManager.material().textures["OutputRender"]
+
+            volumeManager.customUniforms.add("fixedStepSize")
+            volumeManager.shaderProperties["fixedStepSize"] = true
+            volumeManager.customUniforms.add("stepsPerVoxel")
+            volumeManager.shaderProperties["stepsPerVoxel"] = 2
         } else if (outputType == OutputType.LAYERED_IMAGE) {
             volumeManager = createVolumeManager("ComputeNonConvex.comp", "AccumulateNonConvex.comp")
             volumeManager.customTextures.add("LayeredColors")
@@ -144,6 +149,11 @@ class VolumeManagerManager (var hub: Hub) {
 
             colorTexture = volumeManager.material().textures["LayeredColors"]
             depthTexture = volumeManager.material().textures["LayeredDepths"]
+
+            volumeManager.customUniforms.add("fixedStepSize")
+            volumeManager.shaderProperties["fixedStepSize"] = true
+            volumeManager.customUniforms.add("stepsPerVoxel")
+            volumeManager.shaderProperties["stepsPerVoxel"] = 2
         } else if (outputType == OutputType.VDI) {
             vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
             volumeManager = vdiVolumeManager!!.createVDIVolumeManager(vdiFull = false)
