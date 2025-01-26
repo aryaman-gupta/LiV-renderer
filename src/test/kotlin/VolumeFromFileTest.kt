@@ -37,7 +37,7 @@ fun main(args: Array<String>) {
     instance.addVolume(0, volumeDims, volumePosition, is16bit)
 
     // Create a buffer to update the volume
-    val bufferSize = volumeDims[0] * volumeDims[1] * volumeDims[2]
+    val bufferSize = volumeDims[0] * volumeDims[1] * volumeDims[2] * if (is16bit) 2 else 1
     val buffer = ByteBuffer.allocateDirect(bufferSize)
 
     // Read the data from the file
