@@ -341,14 +341,14 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         val cameraByteArray = cameraData.array()
 
         if(mpiParameters.rank != rootRank) {
-            logger.info("Before bcast: ${camera.spatial().position}, ${camera.spatial().rotation}")
+            logger.debug("On rank: ${mpiParameters.rank}, before broadcast camera pose was: ${camera.spatial().position}, ${camera.spatial().rotation}")
         }
 
         MPIJavaWrapper.bcast(cameraByteArray, 0)
         // since the array was updated in-place, we have the changed camera position
 
         if(mpiParameters.rank != rootRank) {
-            logger.info("After bcast: ${camera.spatial().position}, ${camera.spatial().rotation}")
+            logger.debug("On rank: ${mpiParameters.rank}, after broadcast, camera pose is: ${camera.spatial().position}, ${camera.spatial().rotation}")
         }
 
         val newCameraData = ByteBuffer.wrap(cameraByteArray).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
