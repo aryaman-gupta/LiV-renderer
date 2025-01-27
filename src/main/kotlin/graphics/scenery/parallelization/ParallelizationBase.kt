@@ -330,27 +330,33 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     }
 
     fun synchronizeCamera() {
-        if(camera.spatial().position != previousCameraPosition || camera.spatial().rotation != previousCameraRotation) {
-            val cameraData = ByteBuffer.allocate(7 * 4).order(ByteOrder.LITTLE_ENDIAN)
-            cameraData.putFloat(camera.spatial().position.x)
-            cameraData.putFloat(camera.spatial().position.y)
-            cameraData.putFloat(camera.spatial().position.z)
-            cameraData.putFloat(camera.spatial().rotation.x)
-            cameraData.putFloat(camera.spatial().rotation.y)
-            cameraData.putFloat(camera.spatial().rotation.z)
-            cameraData.putFloat(camera.spatial().rotation.w)
-            val cameraByteArray = cameraData.array()
+        val cameraData = ByteBuffer.allocate(7 * 4).order(ByteOrder.LITTLE_ENDIAN)
+        cameraData.putFloat(camera.spatial().position.x)
+        cameraData.putFloat(camera.spatial().position.y)
+        cameraData.putFloat(camera.spatial().position.z)
+        cameraData.putFloat(camera.spatial().rotation.x)
+        cameraData.putFloat(camera.spatial().rotation.y)
+        cameraData.putFloat(camera.spatial().rotation.z)
+        cameraData.putFloat(camera.spatial().rotation.w)
+        val cameraByteArray = cameraData.array()
 
-            MPIJavaWrapper.bcast(cameraByteArray, 0)
-            // since the array was updated in-place, we have the changed camera position
-
-            val newCameraData = ByteBuffer.wrap(cameraByteArray).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
-
-            camera.spatial().position = Vector3f(newCameraData[0], newCameraData[1], newCameraData[2])
-            camera.spatial().rotation = Quaternionf(newCameraData[3], newCameraData[4], newCameraData[5], newCameraData[6])
-
-            previousCameraPosition = camera.spatial().position
-            previousCameraRotation = camera.spatial().rotation
+        if(mpiParameters.rank != rootRank) {
+            logger.info("Before bcast: ${camera.spatial().position}, ${camera.spatial().rotation}")
         }
+
+        MPIJavaWrapper.bcast(cameraByteArray, 0)
+        // since the array was updated in-place, we have the changed camera position
+
+        if(mpiParameters.rank != rootRank) {
+            logger.info("After bcast: ${camera.spatial().position}, ${camera.spatial().rotation}")
+        }
+
+        val newCameraData = ByteBuffer.wrap(cameraByteArray).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+
+        camera.spatial().position = Vector3f(newCameraData[0], newCameraData[1], newCameraData[2])
+        camera.spatial().rotation = Quaternionf(newCameraData[3], newCameraData[4], newCameraData[5], newCameraData[6])
+
+        previousCameraPosition = camera.spatial().position
+        previousCameraRotation = camera.spatial().rotation
     }
 }
