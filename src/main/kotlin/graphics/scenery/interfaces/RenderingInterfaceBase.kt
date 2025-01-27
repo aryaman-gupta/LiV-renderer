@@ -22,7 +22,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
-abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int, windowHeight: Int, rank: Int, commSize: Int, nodeRank: Int) : SceneryBase(applicationName, windowWidth, windowHeight) {
+abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int, windowHeight: Int, rank: Int, commSize: Int, nodeRank: Int) : SceneryBase(
+    "Rank: $rank:$applicationName", windowWidth, windowHeight) {
 
     var volumes: HashMap<Int, BufferedVolume?> = java.util.HashMap()
     var volumeManagerInitialized = AtomicBoolean(false)
