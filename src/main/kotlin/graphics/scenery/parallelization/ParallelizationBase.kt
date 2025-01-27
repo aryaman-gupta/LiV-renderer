@@ -6,9 +6,12 @@ import graphics.scenery.Node
 import graphics.scenery.RichNode
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
+import graphics.scenery.natives.MPIJavaWrapper
 import graphics.scenery.textures.Texture
 import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.utils.lazyLogger
+import org.joml.Quaternionf
+import org.joml.Vector3f
 import org.joml.Vector3i
 import java.io.File
 import java.nio.ByteBuffer
@@ -61,6 +64,9 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
     private var frameNumber = 0
 
+    private var previousCameraPosition = Vector3f(0f, 0f, 0f)
+    private var previousCameraRotation = Quaternionf()
+
     fun setDisplayGeneratedData(displayObject: Mesh) {
         displayGeneratedData = true
         this.displayObject = displayObject
@@ -76,8 +82,10 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      */
     protected val finalCompositedBuffers: MutableList<ByteBuffer> = mutableListOf()
 
+    private val rootRank = 0
+
     protected fun isRootProcess(): Boolean {
-        return mpiParameters.rank == 0
+        return mpiParameters.rank == rootRank
     }
 
     /**
@@ -319,5 +327,30 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         }
 
         finalCompositedBuffers.clear()
+    }
+
+    fun synchronizeCamera() {
+        if(camera.spatial().position != previousCameraPosition || camera.spatial().rotation != previousCameraRotation) {
+            val cameraData = ByteBuffer.allocate(7 * 4).order(ByteOrder.LITTLE_ENDIAN)
+            cameraData.putFloat(camera.spatial().position.x)
+            cameraData.putFloat(camera.spatial().position.y)
+            cameraData.putFloat(camera.spatial().position.z)
+            cameraData.putFloat(camera.spatial().rotation.x)
+            cameraData.putFloat(camera.spatial().rotation.y)
+            cameraData.putFloat(camera.spatial().rotation.z)
+            cameraData.putFloat(camera.spatial().rotation.w)
+            val cameraByteArray = cameraData.array()
+
+            MPIJavaWrapper.bcast(cameraByteArray, 0)
+            // since the array was updated in-place, we have the changed camera position
+
+            val newCameraData = ByteBuffer.wrap(cameraByteArray).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+
+            camera.spatial().position = Vector3f(newCameraData[0], newCameraData[1], newCameraData[2])
+            camera.spatial().rotation = Quaternionf(newCameraData[3], newCameraData[4], newCameraData[5], newCameraData[6])
+
+            previousCameraPosition = camera.spatial().position
+            previousCameraRotation = camera.spatial().rotation
+        }
     }
 }

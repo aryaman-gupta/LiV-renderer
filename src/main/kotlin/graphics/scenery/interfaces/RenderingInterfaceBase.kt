@@ -209,6 +209,7 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
 
         renderer!!.runAfterRendering.add { parallelizationScheme.postRender() }
         renderer!!.runAfterRendering.add { parallelizationScheme.processCompositedOutput() }
+        renderer!!.runAfterRendering.add { parallelizationScheme.synchronizeCamera() }
 
         thread {
             while (renderer?.firstImageReady == false) {
