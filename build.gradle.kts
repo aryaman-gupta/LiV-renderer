@@ -51,7 +51,6 @@ tasks {
     task<Jar>("testJar") {
         archiveClassifier.set("tests")
         from(sourceSets.test.get().output)
-        dependsOn("assemble")
     }
 
     named<ShadowJar>("shadowJar") {
