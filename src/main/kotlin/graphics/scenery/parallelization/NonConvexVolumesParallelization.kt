@@ -3,6 +3,7 @@ package graphics.scenery.parallelization
 import graphics.scenery.Camera
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.IceTWrapper
+import graphics.scenery.utils.SystemHelpers
 import org.joml.Vector3f
 import java.nio.ByteBuffer
 
@@ -23,6 +24,9 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
         if (buffers.size != 2) {
             throw IllegalArgumentException("Expected exactly two buffers but got ${buffers.size}")
         }
+
+        SystemHelpers.dumpToFile(buffers[0], "Color-${mpiParameters.rank}_$frameNumber.raw")
+        SystemHelpers.dumpToFile(buffers[1], "Depth-${mpiParameters.rank}_$frameNumber.raw")
 
         val compositedColors = IceTWrapper.compositeLayered(nativeContext, buffers[0], buffers[1], windowWidth, windowHeight, 2)
 
