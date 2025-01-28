@@ -8,6 +8,7 @@ import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
 import graphics.scenery.natives.MPIJavaWrapper
 import graphics.scenery.textures.Texture
+import graphics.scenery.utils.SystemHelpers
 import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.utils.lazyLogger
 import org.joml.Quaternionf
@@ -316,8 +317,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
             if(saveGeneratedData) {
                 finalCompositedBuffers.forEachIndexed { index, buffer ->
-                    val file = File("composited_output_frame_${frameNumber}_$index.raw")
-                    file.outputStream().use { it.write(buffer.array()) }
+                    SystemHelpers.dumpToFile(buffer, "composited_output_frame_${frameNumber}_$index.raw")
                 }
             }
 
