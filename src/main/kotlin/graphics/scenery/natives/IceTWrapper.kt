@@ -20,9 +20,18 @@ object IceTWrapper {
     // Composite
     external fun compositeFrame(
         handle: Long,
-        subImage: java.nio.ByteBuffer,
+        subImage: ByteBuffer,
         camPos: FloatArray,
         width: Int,
         height: Int
+    ) : ByteBuffer?
+
+    external fun compositeLayered(
+        handle: Long,
+        colorBuffer: ByteBuffer,
+        depthBuffer: ByteBuffer,
+        width: Int,
+        height: Int,
+        numLayers: Int
     ) : ByteBuffer?
 }
