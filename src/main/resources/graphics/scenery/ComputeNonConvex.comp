@@ -84,10 +84,10 @@ uniform float stepsPerVoxel;
 void main()
 {
     bool fixedStepSizeLocal = true;
-    float stepsPerVoxelLocal = 1.0f;
+    float stepsPerVoxelLocal = 2.0f;
 
     bool debug_pixel = false;
-    if(gl_GlobalInvocationID.xy == ivec2(760, 510)) {
+    if(gl_GlobalInvocationID.xy == ivec2(969, 530)) {
         debug_pixel = true;
     }
 
@@ -235,8 +235,6 @@ void main()
             if (step > domain_end_points[index] || i == (numSteps - 1) || v.a >= 0.99) {
                 //the step is larger than the current domain end point, or it is the last step, so we need to stop
 
-//                v.xyz = pow(v.xyz, vec3(1/2.2));
-                v.rgb *= v.a;
                 colors[index] = v;
                 depths[index] = step;
 
