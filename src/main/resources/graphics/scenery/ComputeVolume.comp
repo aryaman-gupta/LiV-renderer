@@ -83,7 +83,7 @@ void main()
     float stepsPerVoxelLocal = stepsPerVoxel;
 
     bool debug_pixel = false;
-    if(gl_GlobalInvocationID.xy == ivec2(760, 510)) {
+    if(gl_GlobalInvocationID.xy == ivec2(477, 243)) {
         debug_pixel = true;
     }
 
@@ -193,8 +193,7 @@ void main()
                 step += nw + step * fwnw;
             }
         }
-        v.xyz = pow(v.xyz, vec3(1/2.2));
-//        v.rgb *= v.a;
+
         #if USE_PRINTF
         if(debug_pixel) {
             debugPrintfEXT("Final color: (%f, %f, %f, %f)", v.rgba);
