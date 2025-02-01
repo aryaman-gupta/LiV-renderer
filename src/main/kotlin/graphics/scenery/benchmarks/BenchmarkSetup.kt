@@ -59,6 +59,9 @@ class BenchmarkSetup (var dataset: Dataset) {
                 } else if (dataset == Dataset.Box) {
                     position = Vector3f(1.640E+0f, 3.983E-1f, 8.619E+0f)
                     rotation = Quaternionf(2.034E-1, 4.697E-2, 9.770E-3, 9.779E-1)
+//
+                    position = Vector3f(1.081E-1f, -1.513E+0f,  2.386E+0f)
+                    rotation = Quaternionf( 1.812E-1,  5.566E-1,  1.259E-1,  8.009E-1)
                 }
             }
         }
@@ -69,28 +72,31 @@ class BenchmarkSetup (var dataset: Dataset) {
         with(tf) {
             if (dataset == Dataset.Kingsnake) {
                 addControlPoint(0.0f, 0.0f)
-                addControlPoint(0.43f, 0.0f)
-                addControlPoint(0.5f, 0.5f)
+                addControlPoint(0.4f, 0.0f)
+                addControlPoint(0.43f, 0.65f)
+                addControlPoint(1.0f, 1.0f)
             } else if (dataset == Dataset.Richtmyer_Meshkov) {
                 addControlPoint(0.0f, 0f)
                 addControlPoint(0.1f, 0.0f)
-                addControlPoint(0.15f, 0.65f)
-                addControlPoint(0.22f, 0.15f)
+                addControlPoint(0.15f, 0.87f)
+                addControlPoint(0.22f, 0.45f)
                 addControlPoint(0.28f, 0.0f)
                 addControlPoint(0.49f, 0.0f)
-                addControlPoint(0.7f, 0.95f)
-                addControlPoint(0.75f, 0.8f)
+                addControlPoint(0.7f, 0.99f)
+                addControlPoint(0.75f, 0.9f)
                 addControlPoint(0.8f, 0.0f)
                 addControlPoint(0.9f, 0.0f)
                 addControlPoint(1.0f, 0.0f)
             } else if (dataset == Dataset.Rayleigh_Taylor) {
-                addControlPoint(0.0f, 0.95f)
+                addControlPoint(0.0f, 0.99f)
+                addControlPoint(0.02f, 0.95f)
                 addControlPoint(0.15f, 0.0f)
                 addControlPoint(0.45f, 0.0f)
-                addControlPoint(0.5f, 0.35f)
+                addControlPoint(0.5f, 0.62f)
                 addControlPoint(0.55f, 0.0f)
                 addControlPoint(0.80f, 0.0f)
-                addControlPoint(1.0f, 0.378f)
+                addControlPoint(0.90f, 0.61f)
+                addControlPoint(1.0f, 0.79f)
             } else if (dataset == Dataset.Box) {
                 addControlPoint(0.0f, 0.0f)
                 addControlPoint(0.1f, 0.0f)
@@ -109,10 +115,10 @@ class BenchmarkSetup (var dataset: Dataset) {
         volume.name = "volume"
         volume.colormap = Colormap.get("hot")
         if(dataset == Dataset.Richtmyer_Meshkov) {
-            volume.colormap = Colormap.get("rb")
+            volume.colormap = Colormap.get("red-blue")
             volume.converterSetups[0].setDisplayRange(50.0, 205.0)
         } else if(dataset == Dataset.Rayleigh_Taylor) {
-            volume.colormap = Colormap.get("rbdarker")
+            volume.colormap = Colormap.get("rb-darker")
         } else if(dataset == Dataset.Box) {
             volume.colormap = Colormap.get("viridis")
         }
