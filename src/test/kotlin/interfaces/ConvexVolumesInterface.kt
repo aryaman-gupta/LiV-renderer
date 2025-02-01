@@ -16,7 +16,7 @@ class ConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int
 
     @Suppress("unused")
     fun addProcessorData(processorId: Int, origin: FloatArray, dimensions: FloatArray) {
-        processorOrigins[processorId] = Vector3f(origin[0], origin[1], origin[2])
+        processorOrigins[processorId] = Vector3f(origin[0] * pixelToWorld, origin[1] * -1 * pixelToWorld, origin[2] * pixelToWorld)
         processorDimensions[processorId] = Vector3f(dimensions[0], dimensions[1], dimensions[2])
     }
 
