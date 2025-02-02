@@ -245,8 +245,18 @@ void main()
                 }
                 #endif
 
+                // Early termination required, otherwise we could get more than NUM_LAYERS and write
+                // into wrong memory.
+                if (v.a >= 0.99) {
+                    break;
+                }
+
+                // Do not count empty fragment, so active ones come first.
+                if (round(v.a * 255) > 0) {
+                    index++;
+                }
+
                 v = vec4(0);
-                index++;
             }
         }
 
