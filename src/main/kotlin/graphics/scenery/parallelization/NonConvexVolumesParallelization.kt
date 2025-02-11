@@ -6,8 +6,6 @@ import graphics.scenery.natives.IceTWrapper
 import graphics.scenery.utils.SystemHelpers
 import org.joml.Vector3f
 import java.nio.ByteBuffer
-import kotlin.io.path.createDirectories
-import kotlin.io.path.Path
 
 class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera) : ParallelizationBase (volumeManagerManager, mpiParameters, camera) {
 
@@ -15,12 +13,9 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
     override val explicitCompositingStep = false
 
     val nativeContext = IceTWrapper.createNativeContext()
-    /// Directory into which raw buffers will be stored.
-    val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/${mpiParameters.commSize}")
 
     init {
         IceTWrapper.setupICET(nativeContext, windowWidth, windowHeight)
-        outDir.createDirectories()
     }
 
     override fun distributeForCompositing(buffers: List<ByteBuffer>) {
@@ -30,8 +25,8 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
             throw IllegalArgumentException("Expected exactly two buffers but got ${buffers.size}")
         }
 
-        SystemHelpers.dumpToFile(buffers[0], "${outDir}/${mpiParameters.rank}-$frameNumber.color")
-        SystemHelpers.dumpToFile(buffers[1], "${outDir}/${mpiParameters.rank}-$frameNumber.depth")
+        SystemHelpers.dumpToFile(buffers[0], "$outDir/$frameNumber-${mpiParameters.rank}.color")
+        SystemHelpers.dumpToFile(buffers[1], "$outDir/$frameNumber-${mpiParameters.rank}.depth")
 
         val compositedColors = IceTWrapper.compositeLayered(nativeContext, buffers[0], buffers[1], windowWidth, windowHeight, 2)
 

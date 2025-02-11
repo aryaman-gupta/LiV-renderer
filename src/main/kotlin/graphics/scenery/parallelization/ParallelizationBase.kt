@@ -18,6 +18,8 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.system.exitProcess
+import kotlin.io.path.createDirectories
+import kotlin.io.path.Path
 
 /**
  * Data class representing MPI (Message Passing Interface) parameters.
@@ -41,6 +43,8 @@ data class MPIParameters(
 abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManager, val mpiParameters: MPIParameters, val camera: Camera) {
 
     val logger by lazyLogger()
+    /// Directory into which raw buffers will be stored.
+    val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/${mpiParameters.commSize}")
 
     open val twoPassRendering = false
     open val explicitCompositingStep = false
@@ -113,6 +117,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             throw RuntimeException("Please ensure that the ParallelizationBase class is initialized after the Renderer, with" +
                     "a valid and initialized VolumeManagerManager")
         }
+
+        outDir.createDirectories()
     }
 
     /**
@@ -301,7 +307,6 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     }
 
     fun processCompositedOutput() {
-        frameNumber++
         if((this is TestParallelization) || (isRootProcess() && finalOutputReady)) {
             finalOutputReady = false
             if(displayGeneratedData) {
@@ -315,8 +320,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             }
 
             if(saveGeneratedData) {
-                finalCompositedBuffers.forEachIndexed { index, buffer ->
-                    SystemHelpers.dumpToFile(buffer, "composited_output_frame_${frameNumber}_$index.raw")
+                finalCompositedBuffers.forEach { buffer ->
+                    SystemHelpers.dumpToFile(buffer, "$outDir/$frameNumber-${mpiParameters.rank}.out")
                 }
             }
 
@@ -325,6 +330,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             }
         }
 
+        frameNumber++
         finalCompositedBuffers.clear()
     }
 
