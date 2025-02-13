@@ -18,8 +18,8 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.system.exitProcess
-import kotlin.io.path.createDirectories
 import kotlin.io.path.Path
+import kotlin.io.path.createDirectories
 
 /**
  * Data class representing MPI (Message Passing Interface) parameters.
@@ -44,7 +44,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
     val logger by lazyLogger()
     /// Directory into which raw buffers will be stored.
-    val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/${mpiParameters.commSize}")
+    open val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/${mpiParameters.commSize}")
 
     open val twoPassRendering = false
     open val explicitCompositingStep = false
@@ -117,8 +117,6 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             throw RuntimeException("Please ensure that the ParallelizationBase class is initialized after the Renderer, with" +
                     "a valid and initialized VolumeManagerManager")
         }
-
-        outDir.createDirectories()
     }
 
     /**
@@ -320,6 +318,10 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             }
 
             if(saveGeneratedData) {
+                if(frameNumber == 0) {
+                    outDir.createDirectories()
+                }
+
                 finalCompositedBuffers.forEach { buffer ->
                     SystemHelpers.dumpToFile(buffer, "$outDir/$frameNumber-${mpiParameters.rank}.out")
                 }
