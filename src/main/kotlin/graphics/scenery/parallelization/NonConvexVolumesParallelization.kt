@@ -12,6 +12,7 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
     override val explicitCompositingStep = false
 
     val nativeContext = IceTWrapper.createNativeContext()
+    val numLayers = System.getenv("LIV_NUM_LAYERS").toInt()
 
     init {
         IceTWrapper.setupICET(nativeContext, windowWidth, windowHeight)
@@ -24,7 +25,14 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
             throw IllegalArgumentException("Expected exactly two buffers but got ${buffers.size}")
         }
 
-        val compositedColors = IceTWrapper.compositeLayered(nativeContext, buffers[0], buffers[1], windowWidth, windowHeight, 2)
+        val compositedColors = IceTWrapper.compositeLayered(
+            nativeContext,
+            buffers[0],
+            buffers[1],
+            windowWidth,
+            windowHeight,
+            numLayers
+        )
 
         if (isRootProcess()) {
             // put the composited colors into the final composited buffer list
