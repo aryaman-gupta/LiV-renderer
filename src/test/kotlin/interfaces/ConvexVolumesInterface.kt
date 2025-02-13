@@ -9,7 +9,7 @@ import org.joml.Vector3f
 
 class ConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int, nodeRank: Int) : RenderingInterfaceBase("ConvexVolumes", wWidth, wHeight, rank, commSize, nodeRank) {
 
-    override var outputProcessingType = OutputProcessingType.DISPLAY
+    override var outputProcessingType = OutputProcessingType.SAVE_TO_DISK
 
     val processorOrigins = mutableMapOf<Int, Vector3f>()
     val processorDimensions = mutableMapOf<Int, Vector3f>()
