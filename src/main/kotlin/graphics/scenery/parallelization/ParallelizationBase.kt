@@ -68,6 +68,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     var displayObject: Mesh? = null
 
     protected var frameNumber = 0
+    val lastFrame: Int? = System.getenv("LIV_LAST_FRAME")?.toInt()
 
     private var previousCameraPosition = Vector3f(0f, 0f, 0f)
     private var previousCameraRotation = Quaternionf()
@@ -324,6 +325,11 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
                 finalCompositedBuffers.forEach { buffer ->
                     SystemHelpers.dumpToFile(buffer, "$outDir/$frameNumber-${mpiParameters.rank}.out")
+                }
+
+                // Stop non-interactive runs after a given number of frames.
+                if (frameNumber == lastFrame) {
+                    exitProcess(0)
                 }
             }
 
