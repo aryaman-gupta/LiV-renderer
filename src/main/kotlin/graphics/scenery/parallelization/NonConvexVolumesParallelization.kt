@@ -31,7 +31,7 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
             buffers[1],
             windowWidth,
             windowHeight,
-            numLayers
+            volumeManagerManager.NUM_LAYERS
         )
 
         if (isRootProcess()) {
