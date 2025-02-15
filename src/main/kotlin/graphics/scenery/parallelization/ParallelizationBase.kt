@@ -64,6 +64,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     var displayObject: Mesh? = null
 
     private var frameNumber = 0
+    private val lastFrame: Int? = System.getenv("LIV_LAST_FRAME")?.toInt()
 
     private var previousCameraPosition = Vector3f(0f, 0f, 0f)
     private var previousCameraRotation = Quaternionf()
@@ -317,6 +318,16 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             if(saveGeneratedData) {
                 finalCompositedBuffers.forEachIndexed { index, buffer ->
                     SystemHelpers.dumpToFile(buffer, "composited_output_frame_${frameNumber}_$index.raw")
+                }
+
+                // Stop non-interactive runs after a given number of frames.
+                if (frameNumber == lastFrame) {
+                    exitProcess(0)
+                }
+
+                // Stop non-interactive runs after a given number of frames.
+                if (frameNumber == lastFrame) {
+                    exitProcess(0)
                 }
             }
 
