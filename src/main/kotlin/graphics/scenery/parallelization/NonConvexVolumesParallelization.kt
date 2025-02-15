@@ -15,8 +15,7 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
     override val explicitCompositingStep = false
 
     val nativeContext = IceTWrapper.createNativeContext()
-    val numLayers = System.getenv("LIV_NUM_LAYERS").toInt()
-    override val outDir = Path(super.outDir.toString() + "x$numLayers")
+    override val outDir = Path(super.outDir.toString() + "x${volumeManagerManager.NUM_LAYERS}")
 
     init {
         IceTWrapper.setupICET(nativeContext, windowWidth, windowHeight)
@@ -39,7 +38,7 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
             buffers[1],
             windowWidth,
             windowHeight,
-            numLayers
+            volumeManagerManager.NUM_LAYERS
         )
 
         if (isRootProcess()) {
