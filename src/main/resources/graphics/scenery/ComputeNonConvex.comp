@@ -84,8 +84,10 @@ uniform int numLayers;
 
 void main()
 {
+    // Work-around for scenery not setting uniforms correctly.
     bool fixedStepSizeLocal = true;
     float stepsPerVoxelLocal = 2.0f;
+    int numLayers = 8;
 
     bool debug_pixel = false;
     if(gl_GlobalInvocationID.xy == ivec2(969, 530)) {
@@ -120,7 +122,7 @@ void main()
     float n, f;
 
     float domain_end_points[MAX_NUM_LAYERS];
-    int index = 0;
+    int domain_idx = 0;
 
     // $repeat:{vis,localNear,localFar,intersectBoundingBox|
     bool vis = false;
@@ -131,8 +133,8 @@ void main()
 
     if ( n < f )
     {
-        domain_end_points[index] = f;
-        index++;
+        domain_end_points[domain_idx] = f;
+        domain_idx++;
         localNear = n;
         localFar = f;
         tnear = min( tnear, max( 0, n ) );
@@ -143,15 +145,15 @@ void main()
 
     // -------------------------------------------------------
 
-    int num_domains = index;
+    int num_domains = min(domain_idx, numLayers);
 
     for (int i = num_domains; i < numLayers; i++) {
         domain_end_points[i] = 100.f; // set to a large (infinite) value
     }
 
     // Sort the domain_end_points array
-    for (int i = 0; i < numLayers - 1; i++) {
-        for (int j = 0; j < numLayers - i - 1; j++) {
+    for (int i = 0; i < num_domains - 1; i++) {
+        for (int j = 0; j < num_domains - i - 1; j++) {
             if (domain_end_points[j] > domain_end_points[j + 1]) {
                 float temp = domain_end_points[j];
                 domain_end_points[j] = domain_end_points[j + 1];
@@ -159,8 +161,6 @@ void main()
             }
         }
     }
-
-    index = 0;
 
     #if USE_PRINTF
     if(debug_pixel) {
@@ -199,11 +199,19 @@ void main()
 
         float standardStepSize = distance(mix(wfront, wback, step + nw), w_entry);
 
+        // Domains and layers must be counted separately, since empty fragments are not stored.
+        int domain_idx = 0;
+        int layer_idx = 0;
+
 		float step_prev = step - stepWidth;
 		vec4 wprev = mix(wfront, wback, step_prev);
         vec4 v = vec4( 0 );
 		for ( int i = 0; i < numSteps; ++i)
         {
+            if (domain_idx >= num_domains) {
+                break;
+            }
+
             if(i % 100 == 0) {
                 #if USE_PRINTF
                 if(debug_pixel) {
@@ -233,25 +241,30 @@ void main()
                 step += nw + step * fwnw;
             }
 
-            if (step > domain_end_points[index] || i == (numSteps - 1) || v.a >= 0.99) {
+            if (step > domain_end_points[domain_idx] || i == (numSteps - 1) || v.a >= 0.99) {
                 //the step is larger than the current domain end point, or it is the last step, so we need to stop
 
-                colors[index] = v;
-                depths[index] = step;
+                if (step > domain_end_points[domain_idx]) {
+                    domain_idx++;
+                }
 
                 #if USE_PRINTF
                 if(debug_pixel) {
-                    debugPrintfEXT("Step: %f is beyond domain boundary of %d", step, index);
+                    debugPrintfEXT("Step: %f is beyond domain boundary of %d", step, domain_idx);
                     debugPrintfEXT("layer has been assigned color: (%f, %f, %f, %f) and depth %f", v.rgba, step);
                 }
                 #endif
 
-                // Do not count empty fragment, so active ones come first.
-                if (round(v.a * 255) > 0) {
-                    index++;
+                // Only store active fragments (alpha > 0), so that there is never an active
+                // fragment behind an empty one.
+                if (floor(v.a * 255.0) > 0) {
+                    colors[layer_idx] = v;
+                    depths[layer_idx] = step;
 
-                    // Early termination required, otherwise we could get more than numLayers and
-                    // write into wrong memory.
+                    layer_idx++;
+
+                    // Early termination required, otherwise we could exceed numLayers and write
+                    // past the color and depth arrays.
                     if (v.a >= 0.99) {
                         break;
                     }
@@ -262,7 +275,7 @@ void main()
         }
 
         // Clear remaining layers.
-        for (int i = index; i < numLayers; i++) {
+        for (int i = layer_idx; i < numLayers; i++) {
             colors[i] = vec4(0);
             depths[i] = 0;
         }
