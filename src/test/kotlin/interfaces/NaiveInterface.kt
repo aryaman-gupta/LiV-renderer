@@ -9,7 +9,7 @@ import graphics.scenery.parallelization.TestParallelization
 
 class NaiveInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int, nodeRank: Int) : RenderingInterfaceBase("NaiveInterface", wWidth, wHeight, rank, commSize, nodeRank) {
 
-    override var outputProcessingType = OutputProcessingType.DISPLAY
+    override var outputProcessingType = OutputProcessingType.SAVE_TO_DISK
 
     override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
         return TestParallelization(volumeManagerManager, mpiParameters, camera)

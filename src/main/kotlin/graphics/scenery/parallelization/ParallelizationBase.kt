@@ -18,6 +18,8 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.system.exitProcess
+import kotlin.io.path.Path
+import kotlin.io.path.createDirectories
 
 /**
  * Data class representing MPI (Message Passing Interface) parameters.
@@ -41,6 +43,8 @@ data class MPIParameters(
 abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManager, val mpiParameters: MPIParameters, val camera: Camera) {
 
     val logger by lazyLogger()
+    /// Directory into which raw buffers will be stored.
+    open val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/${mpiParameters.commSize}")
 
     open val twoPassRendering = false
     open val explicitCompositingStep = false
@@ -64,6 +68,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     var displayObject: Mesh? = null
 
     protected var frameNumber = 0
+    val lastFrame: Int? = System.getenv("LIV_LAST_FRAME")?.toInt()
 
     private var previousCameraPosition = Vector3f(0f, 0f, 0f)
     private var previousCameraRotation = Quaternionf()
@@ -301,7 +306,6 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     }
 
     fun processCompositedOutput() {
-        frameNumber++
         if((this is TestParallelization) || (isRootProcess() && finalOutputReady)) {
             finalOutputReady = false
             if(displayGeneratedData) {
@@ -315,8 +319,17 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             }
 
             if(saveGeneratedData) {
-                finalCompositedBuffers.forEachIndexed { index, buffer ->
-                    SystemHelpers.dumpToFile(buffer, "composited_output_frame_${frameNumber}_$index.raw")
+                if(frameNumber == 0) {
+                    outDir.createDirectories()
+                }
+
+                finalCompositedBuffers.forEach { buffer ->
+                    SystemHelpers.dumpToFile(buffer, "$outDir/$frameNumber-${mpiParameters.rank}.out")
+                }
+
+                // Stop non-interactive runs after a given number of frames.
+                if (frameNumber == lastFrame) {
+                    exitProcess(0)
                 }
             }
 
@@ -325,6 +338,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             }
         }
 
+        frameNumber++
         finalCompositedBuffers.clear()
     }
 

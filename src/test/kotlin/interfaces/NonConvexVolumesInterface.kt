@@ -10,7 +10,7 @@ import org.joml.Vector3f
 @Suppress("unused")
 class NonConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int, nodeRank: Int) : RenderingInterfaceBase("NonConvexVolumes", wWidth, wHeight, rank, commSize, nodeRank) {
 
-    override var outputProcessingType = OutputProcessingType.DISPLAY
+    override var outputProcessingType = OutputProcessingType.SAVE_TO_DISK
 
     override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
         return NonConvexVolumesParallelization(volumeManagerManager, mpiParameters, camera)
