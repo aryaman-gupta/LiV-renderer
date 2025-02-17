@@ -9,6 +9,7 @@ import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
 import graphics.scenery.benchmarks.BenchmarkSetup
 import graphics.scenery.benchmarks.BenchmarkSetup.Dataset
+import graphics.scenery.controls.behaviours.ArcballCameraControl
 import graphics.scenery.parallelization.MPIParameters
 import graphics.scenery.parallelization.ParallelizationBase
 import graphics.scenery.volumes.BufferedVolume
@@ -23,6 +24,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
+import graphics.scenery.utils.extensions.times
 
 abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int, windowHeight: Int, rank: Int, commSize: Int, nodeRank: Int) : SceneryBase(
     "Rank: $rank:$applicationName", windowWidth, windowHeight) {
@@ -234,6 +236,28 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         renderer!!.runAfterRendering.add { parallelizationScheme.postRender() }
         renderer!!.runAfterRendering.add { parallelizationScheme.processCompositedOutput() }
         renderer!!.runAfterRendering.add { parallelizationScheme.synchronizeCamera() }
+
+        val target = Vector3f(volumeDimensions[0].toFloat(), volumeDimensions[1].toFloat(),
+            volumeDimensions[2].toFloat()
+        ) * pixelToWorld * 0.5f
+
+        target.y *= -1.0f
+
+        val rotationQuantum = System.getenv("LIV_RENDERER_BENCHMARK_ROTATION")?.toFloat() ?: 0.0f
+        if(rotationQuantum != 0.0f) {
+            val dataset = BenchmarkSetup.Dataset.valueOf(System.getProperty("liv-renderer.BenchmarkDataset") ?: "None")
+            logger.info("Rotation quantum: $rotationQuantum")
+            renderer!!.runAfterRendering.add {
+                val arcballCameraControl = ArcballCameraControl("fixed_rotation", { cam }, windowWidth, windowHeight, target)
+                if(dataset == BenchmarkSetup.Dataset.Richtmyer_Meshkov) {
+                    arcballCameraControl.rotateDegrees(0f, rotationQuantum)
+                } else {
+                    arcballCameraControl.rotateDegrees(rotationQuantum, 0f)
+                }
+            }
+        } else {
+            logger.error("Did not find the ENV VAR!!")
+        }
 
         thread {
             while (renderer?.firstImageReady == false) {
