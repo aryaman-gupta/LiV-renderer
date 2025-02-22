@@ -3,24 +3,23 @@ package graphics.scenery.tests.interfaces
 import graphics.scenery.Camera
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.interfaces.RenderingInterfaceBase
-import graphics.scenery.parallelization.NonConvexVolumesParallelization
+import graphics.scenery.parallelization.ConvexVolumesParallelization
 import graphics.scenery.parallelization.ParallelizationBase
 
 @Suppress("unused")
-class NonConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int, nodeRank: Int)
-    : RenderingInterfaceBase("NonConvexVolumes", wWidth, wHeight, rank, commSize, nodeRank)
+class OrderedNonConvexInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int, nodeRank: Int)
+    : RenderingInterfaceBase("OrderedNonConvex", wWidth, wHeight, rank, commSize, nodeRank)
 {
-
     override var outputProcessingType = OutputProcessingType.SAVE_TO_DISK
 
     override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
-        return NonConvexVolumesParallelization(volumeManagerManager, mpiParameters, camera)
+        return ConvexVolumesParallelization(volumeManagerManager, mpiParameters, camera)
     }
 
     override fun setupVolumeManagerManager() {
         volumeManagerManager = VolumeManagerManager(hub)
         volumeManagerManager.instantiateVolumeManager(
-            VolumeManagerManager.OutputType.LAYERED_IMAGE,
+            VolumeManagerManager.OutputType.REGULAR_IMAGE,
             windowWidth, windowHeight,
             scene
         )

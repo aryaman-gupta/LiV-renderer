@@ -6,8 +6,6 @@ import graphics.scenery.natives.IceTWrapper
 import graphics.scenery.utils.SystemHelpers
 import org.joml.Vector3f
 import java.nio.ByteBuffer
-import kotlin.io.path.Path
-import kotlin.io.path.createDirectories
 
 class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera) : ParallelizationBase (volumeManagerManager, mpiParameters, camera) {
 
@@ -15,11 +13,9 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
     override val explicitCompositingStep = false
 
     val nativeContext = IceTWrapper.createNativeContext()
-    override val outDir = Path(super.outDir.toString() + "x${volumeManagerManager.NUM_LAYERS}")
 
     init {
         IceTWrapper.setupICET(nativeContext, windowWidth, windowHeight)
-        outDir.createDirectories()
     }
 
     override fun distributeForCompositing(buffers: List<ByteBuffer>) {

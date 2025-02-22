@@ -44,7 +44,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
     val logger by lazyLogger()
     /// Directory into which raw buffers will be stored.
-    open val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/${mpiParameters.commSize}")
+    val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/${mpiParameters.commSize}${
+        if (volumeManagerManager.NUM_LAYERS < 0) "" else "x${volumeManagerManager.NUM_LAYERS}"}")
 
     open val twoPassRendering = false
     open val explicitCompositingStep = false
@@ -68,7 +69,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     var displayObject: Mesh? = null
 
     protected var frameNumber = 0
-    val lastFrame: Int? = System.getenv("LIV_LAST_FRAME")?.toInt()
+    val lastFrame = System.getenv("LIV_LAST_FRAME")?.toInt() ?: -1
 
     private var previousCameraPosition = Vector3f(0f, 0f, 0f)
     private var previousCameraRotation = Quaternionf()
@@ -118,6 +119,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             throw RuntimeException("Please ensure that the ParallelizationBase class is initialized after the Renderer, with" +
                     "a valid and initialized VolumeManagerManager")
         }
+
+        outDir.createDirectories()
     }
 
     /**
@@ -319,10 +322,6 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             }
 
             if(saveGeneratedData) {
-                if(frameNumber == 0) {
-                    outDir.createDirectories()
-                }
-
                 finalCompositedBuffers.forEach { buffer ->
                     SystemHelpers.dumpToFile(buffer, "$outDir/$frameNumber-${mpiParameters.rank}.out")
                 }
