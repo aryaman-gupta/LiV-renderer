@@ -3,7 +3,7 @@ package graphics.scenery.tests.interfaces
 import graphics.scenery.Camera
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.interfaces.RenderingInterfaceBase
-import graphics.scenery.parallelization.ConvexVolumesParallelization
+import graphics.scenery.parallelization.FlatImagesParallelization
 import graphics.scenery.parallelization.ParallelizationBase
 import org.joml.Vector3f
 
@@ -21,7 +21,7 @@ class ConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int
     }
 
     override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
-        return ConvexVolumesParallelization(volumeManagerManager, mpiParameters, camera)
+        return FlatImagesParallelization("convex", volumeManagerManager, mpiParameters, camera)
     }
 
     override fun setupVolumeManagerManager() {
@@ -53,6 +53,6 @@ class ConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int
             processorCentroids.put(processorId, Vector3f(origin).add(frontTopRight).mul(0.5f))
 
         }
-        (parallelizationScheme as ConvexVolumesParallelization).setCentroids(processorCentroids)
+        (parallelizationScheme as FlatImagesParallelization).setCentroids(processorCentroids)
     }
 }

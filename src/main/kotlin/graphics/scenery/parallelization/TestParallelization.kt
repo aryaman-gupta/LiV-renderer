@@ -4,7 +4,9 @@ import graphics.scenery.Camera
 import graphics.scenery.VolumeManagerManager
 import java.nio.ByteBuffer
 
-class TestParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera) : ParallelizationBase(volumeManagerManager, mpiParameters, camera) {
+class TestParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera)
+    : ParallelizationBase("test", volumeManagerManager, mpiParameters, camera)
+{
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false

@@ -6,7 +6,12 @@ import graphics.scenery.natives.IceTWrapper
 import org.joml.Vector3f
 import java.nio.ByteBuffer
 
-class ConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera) : ParallelizationBase (volumeManagerManager, mpiParameters, camera) {
+class FlatImagesParallelization(
+    interfaceName: String,
+    volumeManagerManager: VolumeManagerManager,
+    mpiParameters: MPIParameters,
+    camera: Camera
+) : ParallelizationBase (interfaceName, volumeManagerManager, mpiParameters, camera) {
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false

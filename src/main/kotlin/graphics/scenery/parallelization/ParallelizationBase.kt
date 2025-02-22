@@ -40,11 +40,16 @@ data class MPIParameters(
  * @property volumeManagerManager The manager responsible for handling volume data.
  * @property mpiParameters The MPI parameters for the current process.
  */
-abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManager, val mpiParameters: MPIParameters, val camera: Camera) {
+abstract class ParallelizationBase(
+    interfaceName: String,
+    var volumeManagerManager: VolumeManagerManager,
+    val mpiParameters: MPIParameters,
+    val camera: Camera
+) {
 
     val logger by lazyLogger()
     /// Directory into which raw buffers will be stored.
-    val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/${mpiParameters.commSize}${
+    val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/$interfaceName/${mpiParameters.commSize}${
         if (volumeManagerManager.NUM_LAYERS < 0) "" else "x${volumeManagerManager.NUM_LAYERS}"}")
 
     open val twoPassRendering = false

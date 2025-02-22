@@ -7,7 +7,9 @@ import graphics.scenery.utils.SystemHelpers
 import org.joml.Vector3f
 import java.nio.ByteBuffer
 
-class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera) : ParallelizationBase (volumeManagerManager, mpiParameters, camera) {
+class LayeredImagesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera)
+    : ParallelizationBase ("layered", volumeManagerManager, mpiParameters, camera)
+{
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false

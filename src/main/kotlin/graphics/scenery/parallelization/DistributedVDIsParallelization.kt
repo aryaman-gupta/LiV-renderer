@@ -14,7 +14,7 @@ import kotlin.system.measureNanoTime
 import kotlin.math.ceil
 
 class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera)
-    : ParallelizationBase(volumeManagerManager, mpiParameters, camera) {
+    : ParallelizationBase("vdi", volumeManagerManager, mpiParameters, camera) {
 
     override val twoPassRendering = true
 
