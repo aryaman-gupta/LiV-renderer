@@ -27,8 +27,10 @@ class LayeredImagesParallelization(volumeManagerManager: VolumeManagerManager, m
             throw IllegalArgumentException("Expected exactly two buffers but got ${buffers.size}")
         }
 
-        SystemHelpers.dumpToFile(buffers[0], "$outDir/$frameNumber-${mpiParameters.rank}.color")
-        SystemHelpers.dumpToFile(buffers[1], "$outDir/$frameNumber-${mpiParameters.rank}.depth")
+        if (saveCompositingInput) {
+            SystemHelpers.dumpToFile(buffers[0], "$outDir/$frameNumber-${mpiParameters.rank}.color")
+            SystemHelpers.dumpToFile(buffers[1], "$outDir/$frameNumber-${mpiParameters.rank}.depth")
+        }
 
         val compositedColors = IceTWrapper.compositeLayered(
             nativeContext,

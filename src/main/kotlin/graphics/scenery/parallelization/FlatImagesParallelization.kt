@@ -3,6 +3,7 @@ package graphics.scenery.parallelization
 import graphics.scenery.Camera
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.IceTWrapper
+import graphics.scenery.utils.SystemHelpers
 import org.joml.Vector3f
 import java.nio.ByteBuffer
 
@@ -32,6 +33,10 @@ class FlatImagesParallelization(
 
         if (buffers.size != 1) {
             throw IllegalArgumentException("Expected exactly one buffer but got ${buffers.size}")
+        }
+
+        if (saveCompositingInput) {
+            SystemHelpers.dumpToFile(buffers[0], "$outDir/$frameNumber-${mpiParameters.rank}.color")
         }
 
         val cameraPosition = FloatArray(3)

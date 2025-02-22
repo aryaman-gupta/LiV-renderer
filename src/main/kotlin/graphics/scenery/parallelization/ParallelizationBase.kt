@@ -51,6 +51,7 @@ abstract class ParallelizationBase(
     /// Directory into which raw buffers will be stored.
     val outDir = Path("out/${System.getProperty("liv-renderer.BenchmarkDataset")}/$interfaceName/${mpiParameters.commSize}${
         if (volumeManagerManager.NUM_LAYERS < 0) "" else "x${volumeManagerManager.NUM_LAYERS}"}")
+    val saveCompositingInput = System.getenv("LIV_SAVE_COMPOSITING_INPUT").toBoolean()
 
     open val twoPassRendering = false
     open val explicitCompositingStep = false
