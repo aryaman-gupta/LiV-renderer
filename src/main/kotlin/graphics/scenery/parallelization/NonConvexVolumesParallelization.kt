@@ -12,7 +12,6 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
     override val explicitCompositingStep = false
 
     val nativeContext = IceTWrapper.createNativeContext()
-    val numLayers = System.getenv("LIV_NUM_LAYERS").toInt()
 
     init {
         IceTWrapper.setupICET(nativeContext, windowWidth, windowHeight)
