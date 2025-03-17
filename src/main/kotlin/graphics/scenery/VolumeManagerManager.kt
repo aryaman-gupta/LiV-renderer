@@ -13,7 +13,7 @@ import org.lwjgl.system.MemoryUtil
 
 class VolumeManagerManager (var hub: Hub) {
 
-    val NUM_LAYERS = 2
+    val NUM_LAYERS = System.getenv("LIV_NUM_LAYERS")?.toInt() ?: 0
 
     private lateinit var volumeManager: VolumeManager
     private var vdiVolumeManager: VDIVolumeManager? = null
@@ -154,6 +154,8 @@ class VolumeManagerManager (var hub: Hub) {
             volumeManager.shaderProperties["fixedStepSize"] = true
             volumeManager.customUniforms.add("stepsPerVoxel")
             volumeManager.shaderProperties["stepsPerVoxel"] = 2
+            volumeManager.customUniforms.add("numLayers")
+            volumeManager.shaderProperties["numLayers"] = NUM_LAYERS
         } else if (outputType == OutputType.VDI) {
             vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
             volumeManager = vdiVolumeManager!!.createVDIVolumeManager(vdiFull = false)

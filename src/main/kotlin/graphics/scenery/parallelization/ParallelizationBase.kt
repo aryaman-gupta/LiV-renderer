@@ -301,7 +301,6 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     }
 
     fun processCompositedOutput() {
-        frameNumber++
         if((this is TestParallelization) || (isRootProcess() && finalOutputReady)) {
             finalOutputReady = false
             if(displayGeneratedData) {
@@ -325,6 +324,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             }
         }
 
+        frameNumber++
         finalCompositedBuffers.clear()
     }
 
