@@ -74,7 +74,8 @@ float adjustOpacity(float a, float modifiedStepLength) {
 uniform bool fixedStepSize;
 uniform float stepsPerVoxel;
 
-#define NUM_LAYERS 2
+uniform int numLayers;
+#define MAX_NUM_LAYERS 32
 
 // ---------------------
 // $insert{Convert}
@@ -83,8 +84,10 @@ uniform float stepsPerVoxel;
 
 void main()
 {
+    // Work-around for scenery not setting uniforms correctly.
     bool fixedStepSizeLocal = true;
     float stepsPerVoxelLocal = 2.0f;
+    int numLayers = 8;
 
     bool debug_pixel = false;
     if(gl_GlobalInvocationID.xy == ivec2(969, 530)) {
@@ -97,7 +100,7 @@ void main()
     //	vec2 fragCoord = (vrParameters.stereoEnabled ^ 1) * gl_FragCoord.xy + vrParameters.stereoEnabled * vec2((gl_FragCoord.x/2.0 + currentEye.eye * gl_FragCoord.x/2.0), gl_FragCoord.y);
     //	vec2 viewportSizeActual = (vrParameters.stereoEnabled ^ 1) * viewportSize + vrParameters.stereoEnabled * vec2(viewportSize.x/2.0, viewportSize.y);
     //	vec2 uv = 2 * ( gl_FragCoord.xy + dsp ) / viewportSizeActual - 1;
-    vec2 texcoord = gl_GlobalInvocationID.xy/vec2(1280, 720);
+    vec2 texcoord = gl_GlobalInvocationID.xy/viewportSize;
     vec2 uv = texcoord * 2.0 - vec2(1.0);
     vec2 depthUV = (vrParameters.stereoEnabled ^ 1) * texcoord + vrParameters.stereoEnabled * vec2((texcoord.x/2.0 + currentEye.eye * 0.5), texcoord.y);
     depthUV = depthUV * 2.0 - vec2(1.0);
@@ -118,8 +121,8 @@ void main()
     float tnear = 1, tfar = 0, tmax = getMaxDepth( depthUV );
     float n, f;
 
-    float domain_end_points[NUM_LAYERS];
-    int index = 0;
+    float domain_end_points[MAX_NUM_LAYERS];
+    int domain_idx = 0;
 
     // $repeat:{vis,localNear,localFar,intersectBoundingBox|
     bool vis = false;
@@ -130,8 +133,8 @@ void main()
 
     if ( n < f )
     {
-        domain_end_points[index] = f;
-        index++;
+        domain_end_points[domain_idx] = f;
+        domain_idx++;
         localNear = n;
         localFar = f;
         tnear = min( tnear, max( 0, n ) );
@@ -142,15 +145,15 @@ void main()
 
     // -------------------------------------------------------
 
-    int num_domains = index;
+    int num_domains = min(domain_idx, numLayers);
 
-    for (int i = num_domains; i < NUM_LAYERS; i++) {
+    for (int i = num_domains; i < numLayers; i++) {
         domain_end_points[i] = 100.f; // set to a large (infinite) value
     }
 
     // Sort the domain_end_points array
-    for (int i = 0; i < NUM_LAYERS - 1; i++) {
-        for (int j = 0; j < NUM_LAYERS - i - 1; j++) {
+    for (int i = 0; i < num_domains - 1; i++) {
+        for (int j = 0; j < num_domains - i - 1; j++) {
             if (domain_end_points[j] > domain_end_points[j + 1]) {
                 float temp = domain_end_points[j];
                 domain_end_points[j] = domain_end_points[j + 1];
@@ -158,8 +161,6 @@ void main()
             }
         }
     }
-
-    index = 0;
 
     #if USE_PRINTF
     if(debug_pixel) {
@@ -169,8 +170,8 @@ void main()
     }
     #endif
 
-    vec4 colors[NUM_LAYERS];
-    float depths[NUM_LAYERS];
+    vec4 colors[MAX_NUM_LAYERS];
+    float depths[MAX_NUM_LAYERS];
 
     if ( tnear < tfar )
     {
@@ -198,11 +199,19 @@ void main()
 
         float standardStepSize = distance(mix(wfront, wback, step + nw), w_entry);
 
+        // Domains and layers must be counted separately, since empty fragments are not stored.
+        int domain_idx = 0;
+        int layer_idx = 0;
+
 		float step_prev = step - stepWidth;
 		vec4 wprev = mix(wfront, wback, step_prev);
         vec4 v = vec4( 0 );
 		for ( int i = 0; i < numSteps; ++i)
         {
+            if (domain_idx >= num_domains) {
+                break;
+            }
+
             if(i % 100 == 0) {
                 #if USE_PRINTF
                 if(debug_pixel) {
@@ -232,37 +241,53 @@ void main()
                 step += nw + step * fwnw;
             }
 
-            if (step > domain_end_points[index] || i == (numSteps - 1) || v.a >= 0.99) {
+            if (step > domain_end_points[domain_idx] || i == (numSteps - 1) || v.a >= 0.99) {
                 //the step is larger than the current domain end point, or it is the last step, so we need to stop
 
-                colors[index] = v;
-                depths[index] = step;
+                if (step > domain_end_points[domain_idx]) {
+                    domain_idx++;
+                }
 
                 #if USE_PRINTF
                 if(debug_pixel) {
-                    debugPrintfEXT("Step: %f is beyond domain boundary of %d", step, index);
+                    debugPrintfEXT("Step: %f is beyond domain boundary of %d", step, domain_idx);
                     debugPrintfEXT("layer has been assigned color: (%f, %f, %f, %f) and depth %f", v.rgba, step);
                 }
                 #endif
 
+                // Only store active fragments (alpha > 0), so that there is never an active
+                // fragment behind an empty one.
+                if (floor(v.a * 255.0) > 0) {
+                    colors[layer_idx] = v;
+                    depths[layer_idx] = step;
+
+                    layer_idx++;
+
+                    // Early termination required, otherwise we could exceed numLayers and write
+                    // past the color and depth arrays.
+                    if (v.a >= 0.99) {
+                        break;
+                    }
+                }
+
                 v = vec4(0);
-                index++;
             }
         }
 
-        for (int i = num_domains; i < NUM_LAYERS; i++) {
+        // Clear remaining layers.
+        for (int i = layer_idx; i < numLayers; i++) {
             colors[i] = vec4(0);
             depths[i] = 0;
         }
 
     } else {
-        for (int i = 0; i < NUM_LAYERS; i++) {
+        for (int i = 0; i < numLayers; i++) {
             colors[i] = vec4(0);
             depths[i] = 0;
         }
     }
 
-    for (int i = 0; i < NUM_LAYERS; i++) {
+    for (int i = 0; i < numLayers; i++) {
 
         if(debug_pixel) {
             debugPrintfEXT("Storing color value: (%f, %f, %f, %f) and depth %f", colors[i].rgba, depths[i]);
