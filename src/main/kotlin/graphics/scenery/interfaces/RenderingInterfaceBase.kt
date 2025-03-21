@@ -5,6 +5,7 @@ import graphics.scenery.DetachedHeadCamera
 import graphics.scenery.FullscreenObject
 import graphics.scenery.Origin
 import graphics.scenery.SceneryBase
+import graphics.scenery.Settings
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
 import graphics.scenery.parallelization.MPIParameters
@@ -178,14 +179,16 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         volumeManagerInitialized.set(true)
 
         val cam: Camera = DetachedHeadCamera()
-        with(cam) {
-            spatial().position = Vector3f(-2.300E+0f, -6.402E+0f, 1.100E+0f)
-            spatial().rotation = Quaternionf(2.495E-1, -7.098E-1, 3.027E-1, -5.851E-1)
+        if(!Settings().get("RemoteCamera", false)) {
+            with(cam) {
+                spatial().position = Vector3f(-2.300E+0f, -6.402E+0f, 1.100E+0f)
+                spatial().rotation = Quaternionf(2.495E-1, -7.098E-1, 3.027E-1, -5.851E-1)
 
-            perspectiveCamera(50.0f, windowWidth, windowHeight)
-            cam.farPlaneDistance = 20.0f
+                perspectiveCamera(50.0f, windowWidth, windowHeight)
+                cam.farPlaneDistance = 20.0f
+            }
+            scene.addChild(cam)
         }
-        scene.addChild(cam)
 
         parallelizationScheme = initializeParallelizationScheme(cam)
 
