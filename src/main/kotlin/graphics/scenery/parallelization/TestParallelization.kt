@@ -17,4 +17,8 @@ class TestParallelization(volumeManagerManager: VolumeManagerManager, mpiParamet
 
         finalCompositedBuffers.add(buffers[0])
     }
+
+    override fun streamOutput() {
+        // do nothing
+    }
 }
