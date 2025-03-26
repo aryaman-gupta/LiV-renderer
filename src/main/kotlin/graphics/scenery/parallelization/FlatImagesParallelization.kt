@@ -1,8 +1,10 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
+import graphics.scenery.Settings
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.IceTWrapper
+import graphics.scenery.utils.VideoEncoder
 import graphics.scenery.utils.SystemHelpers
 import org.joml.Vector3f
 import java.nio.ByteBuffer
@@ -19,8 +21,17 @@ class FlatImagesParallelization(
 
     val nativeContext = IceTWrapper.createNativeContext()
 
+    private lateinit var encoder: VideoEncoder
+
     init {
         IceTWrapper.setupICET(nativeContext, windowWidth, windowHeight)
+
+        Settings().set("VideoEncoder.StreamVideo", true)
+        Settings().set("VideoEncoder.StreamingAddress", "rtp://" + Settings().get("ServerAddress", "127.0.0.1").toString()
+            .replaceFirst(Regex("^[a-zA-Z]+://"), "") + ":5004")
+        encoder = VideoEncoder(windowWidth, windowHeight, "rtp://" + Settings().get("ServerAddress", "127.0.0.1").toString()
+            .replaceFirst(Regex("^[a-zA-Z]+://"), "") + ":5004", networked = true)
+
     }
 
     fun setCentroids(centroids: MutableMap<Int, Vector3f>) {
@@ -52,5 +63,10 @@ class FlatImagesParallelization(
                 finalCompositedBuffers.add(compositedColors)
             }
         }
+    }
+
+    override fun streamOutput() {
+        encoder.encodeFrame(finalCompositedBuffers[0])
+        videoStreamRunning = true
     }
 }

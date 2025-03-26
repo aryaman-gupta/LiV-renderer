@@ -64,7 +64,7 @@ fun main() {
     // Start the rendering loop
     while (true) {
         // Perform rendering tasks
-        Thread.sleep(10000)
+        Thread.sleep(100000)
         instance.stopRendering()
     }
 }

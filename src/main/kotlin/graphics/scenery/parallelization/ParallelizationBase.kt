@@ -64,6 +64,8 @@ abstract class ParallelizationBase(
     var compositingPass = false
     var finalOutputReady = false
 
+    protected var videoStreamRunning = false
+
     var compositorNode: RichNode? = null
 
     protected open var windowWidth: Int = 0
@@ -209,6 +211,8 @@ abstract class ParallelizationBase(
 
     }
 
+    abstract fun streamOutput()
+
     /**
      * The main function controlling the parallel rendering execution. This function is called after the rendering process
      * is complete and is responsible for fetching the rendered buffers, distributing them for compositing, and orchestrating
@@ -339,7 +343,7 @@ abstract class ParallelizationBase(
             }
 
             if(streamGeneratedData) {
-                // TODO: stream the final composited buffers to a remote server
+                streamOutput()
             }
         }
 

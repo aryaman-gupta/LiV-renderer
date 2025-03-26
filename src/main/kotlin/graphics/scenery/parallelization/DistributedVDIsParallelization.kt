@@ -144,4 +144,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         val compositor = compositorNode as VDICompositorNode
         compositor.doComposite = setTo
     }
+
+    override fun streamOutput() {
+        TODO("Not yet implemented")
+    }
 }
