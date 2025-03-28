@@ -175,6 +175,18 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     abstract fun distributeForCompositing(buffers: List<ByteBuffer>)
 
     /**
+     * Gathers the composited output. This function is only executed if [explicitCompositingStep] is set to true.
+     * It should be overridden to gather the composited output in parallel rendering strategies that involve an
+     * explicit compositing step.
+     *
+     * The implementation of the function is responsible for storing the final gathered composited output buffers
+     * in the [finalCompositedBuffers] list.
+     */
+    open fun gatherCompositedOutput() {
+        // Override to gather composited output if needed
+    }
+
+    /**
      * Uploads the data necessary for compositing. This function should be overridden to upload data and update necessary
      * camera parameters for compositing.
      *
@@ -296,8 +308,14 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
         if(explicitCompositingStep && compositingPass) {
             // The compositing pass just completed
+            val compositedColors = compositorNode!!.material().textures["compositedColors"]
+            // safe to assume that an explicit compositing step will always require a depth texture
+            val compositedDepths = compositorNode!!.material().textures["compositedDepths"]
+            compositedColors.fetchFromGPU()
+            compositedDepths.fetchFromGPU()
             compositingPass = false
             setCompositorActivityStatus(false)
+            gatherCompositedOutput()
             firstPass = true
             volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
         }
