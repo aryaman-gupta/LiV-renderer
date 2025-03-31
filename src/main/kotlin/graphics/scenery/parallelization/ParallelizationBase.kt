@@ -48,6 +48,20 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     open val firstPassFlag = ""
     open val secondPassFlag = ""
 
+    open val compositedColorsTextureName: String
+        get() = if (explicitCompositingStep) {
+            throw IllegalStateException("The parallelization strategy requires an explicit compositing step, but compositedColorsTextureName is not overridden.")
+        } else {
+            "compositedColors"
+        }
+
+    open val compositedDepthsTextureName: String
+        get() = if (explicitCompositingStep) {
+            throw IllegalStateException("The parallelization strategy requires an explicit compositing step, but compositedDepthsTextureName is not overridden.")
+        } else {
+            "compositedDepths"
+        }
+
     var firstPass = true
     var secondPass = false
     var compositingPass = false
@@ -182,7 +196,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      * The implementation of the function is responsible for storing the final gathered composited output buffers
      * in the [finalCompositedBuffers] list.
      */
-    open fun gatherCompositedOutput() {
+    open fun gatherCompositedOutput(buffers: List<ByteBuffer>) {
         // Override to gather composited output if needed
     }
 
@@ -307,15 +321,29 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         }
 
         if(explicitCompositingStep && compositingPass) {
+            val partiallyCompositedBuffers: MutableList<ByteBuffer> = mutableListOf()
+
             // The compositing pass just completed
-            val compositedColors = compositorNode!!.material().textures["compositedColors"]
+            val compositedColors = compositorNode!!.material().textures[compositedColorsTextureName]!!
             // safe to assume that an explicit compositing step will always require a depth texture
-            val compositedDepths = compositorNode!!.material().textures["compositedDepths"]
-            compositedColors.fetchFromGPU()
-            compositedDepths.fetchFromGPU()
+            val compositedDepths = compositorNode!!.material().textures[compositedDepthsTextureName]!!
+            var textureFetched = compositedColors.fetchFromGPU()
+            if (!textureFetched) {
+                throw RuntimeException("Error fetching composited colors texture.").also { it.printStackTrace() }
+            }
+
+            partiallyCompositedBuffers.add(compositedColors.contents!!)
+
+            textureFetched = compositedDepths.fetchFromGPU()
+            if (!textureFetched) {
+                throw RuntimeException("Error fetching composited depths texture.").also { it.printStackTrace() }
+            }
+
+            partiallyCompositedBuffers.add(compositedDepths.contents!!)
+
             compositingPass = false
             setCompositorActivityStatus(false)
-            gatherCompositedOutput()
+            gatherCompositedOutput(partiallyCompositedBuffers)
             firstPass = true
             volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
         }
