@@ -3,11 +3,8 @@ package graphics.scenery.parallelization
 import graphics.scenery.Camera
 import graphics.scenery.Settings
 import graphics.scenery.VolumeManagerManager
-import graphics.scenery.backends.Renderer
 import graphics.scenery.natives.IceTWrapper
 import graphics.scenery.utils.VideoEncoder
-import graphics.scenery.volumes.Volume
-import org.joml.Vector3f
 import java.nio.ByteBuffer
 
 class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera) : ParallelizationBase (volumeManagerManager, mpiParameters, camera) {
@@ -48,13 +45,13 @@ class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager
         if (isRootProcess()) {
             // put the composited colors into the final composited buffer list
             compositedColors?.let {
-                finalCompositedBuffers.add(compositedColors)
+                finalBuffers.add(compositedColors)
             }
         }
     }
 
     override fun streamOutput() {
-        encoder.encodeFrame(finalCompositedBuffers[0])
+        encoder.encodeFrame(finalBuffers[0])
         videoStreamRunning = true
     }
 }

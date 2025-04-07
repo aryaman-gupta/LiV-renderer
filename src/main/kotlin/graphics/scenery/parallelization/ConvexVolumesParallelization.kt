@@ -50,13 +50,13 @@ class ConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, m
         if (isRootProcess()) {
             // put the composited colors into the final composited buffer list
             compositedColors?.let {
-                finalCompositedBuffers.add(compositedColors)
+                finalBuffers.add(compositedColors)
             }
         }
     }
 
     override fun streamOutput() {
-        encoder.encodeFrame(finalCompositedBuffers[0])
+        encoder.encodeFrame(finalBuffers[0])
         videoStreamRunning = true
     }
 }

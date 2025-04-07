@@ -2,7 +2,6 @@ package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
 import graphics.scenery.Mesh
-import graphics.scenery.Node
 import graphics.scenery.RichNode
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
@@ -14,10 +13,8 @@ import graphics.scenery.utils.lazyLogger
 import org.joml.Quaternionf
 import org.joml.Vector3f
 import org.joml.Vector3i
-import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.system.exitProcess
 
 /**
  * Data class representing MPI (Message Passing Interface) parameters.
@@ -97,7 +94,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      * 2. Depth buffer (if any)
      * 3. Additional buffers, e.g., alpha (if any)
      */
-    protected val finalCompositedBuffers: MutableList<ByteBuffer> = mutableListOf()
+    protected val finalBuffers: MutableList<ByteBuffer> = mutableListOf()
 
     private val rootRank = 0
 
@@ -194,7 +191,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      * explicit compositing step.
      *
      * The implementation of the function is responsible for storing the final gathered composited output buffers
-     * in the [finalCompositedBuffers] list.
+     * in the [finalBuffers] list.
      */
     open fun gatherCompositedOutput(buffers: List<ByteBuffer>) {
         // Override to gather composited output if needed
@@ -321,7 +318,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         }
 
         if(explicitCompositingStep && compositingPass) {
-            val partiallyCompositedBuffers: MutableList<ByteBuffer> = mutableListOf()
+            val compositedBuffers: MutableList<ByteBuffer> = mutableListOf()
 
             // The compositing pass just completed
             val compositedColors = compositorNode!!.material().textures[compositedColorsTextureName]!!
@@ -332,18 +329,18 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
                 throw RuntimeException("Error fetching composited colors texture.").also { it.printStackTrace() }
             }
 
-            partiallyCompositedBuffers.add(compositedColors.contents!!)
+            compositedBuffers.add(compositedColors.contents!!)
 
             textureFetched = compositedDepths.fetchFromGPU()
             if (!textureFetched) {
                 throw RuntimeException("Error fetching composited depths texture.").also { it.printStackTrace() }
             }
 
-            partiallyCompositedBuffers.add(compositedDepths.contents!!)
+            compositedBuffers.add(compositedDepths.contents!!)
 
             compositingPass = false
             setCompositorActivityStatus(false)
-            gatherCompositedOutput(partiallyCompositedBuffers)
+            gatherCompositedOutput(compositedBuffers)
             firstPass = true
             volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
         }
@@ -355,7 +352,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             finalOutputReady = false
             if(displayGeneratedData) {
                 displayObject?.let {
-                    val bufferLE = finalCompositedBuffers.first().order(ByteOrder.LITTLE_ENDIAN)
+                    val bufferLE = finalBuffers.first().order(ByteOrder.LITTLE_ENDIAN)
                     //TODO: fix memory leak on GPU caused my creating a new texture each time
                     displayObject!!.material().textures["diffuse"] =
                         Texture(Vector3i(windowWidth, windowHeight, 1), 4, contents = bufferLE, mipmap = true)
@@ -364,7 +361,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             }
 
             if(saveGeneratedData) {
-                finalCompositedBuffers.forEachIndexed { index, buffer ->
+                finalBuffers.forEachIndexed { index, buffer ->
                     SystemHelpers.dumpToFile(buffer, "composited_output_frame_${frameNumber}_$index.raw")
                 }
             }
@@ -375,7 +372,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         }
 
         frameNumber++
-        finalCompositedBuffers.clear()
+        finalBuffers.clear()
     }
 
     fun synchronizeCamera() {

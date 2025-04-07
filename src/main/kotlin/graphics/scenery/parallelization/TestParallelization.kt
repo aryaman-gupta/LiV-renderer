@@ -15,7 +15,7 @@ class TestParallelization(volumeManagerManager: VolumeManagerManager, mpiParamet
             throw IllegalArgumentException("Expected exactly one buffer but got ${buffers.size}")
         }
 
-        finalCompositedBuffers.add(buffers[0])
+        finalBuffers.add(buffers[0])
     }
 
     override fun streamOutput() {

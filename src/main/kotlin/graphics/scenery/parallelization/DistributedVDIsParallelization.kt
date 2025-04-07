@@ -39,6 +39,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     @Suppress("unused")
     private external fun distributeVDIs(subVDIColor: ByteBuffer, subVDIDepth: ByteBuffer, prefixSums: ByteBuffer, supersegmentCounts: IntArray, commSize: Int,
                                         colPointer: Long, depthPointer: Long, prefixPointer: Long, mpiPointer: Long)
+    private external fun gatherCompositedVDIs(compositedVDIColor: ByteBuffer, compositedVDIDepth: ByteBuffer, compositedVDILen: Int, root: Int, myRank: Int, commSize: Int,
+                                              colPointer: Long, depthPointer: Long, vo: Int, mpiPointer: Long)
 
     override fun setupCompositor(): VDICompositorNode {
         return VDICompositorNode(windowWidth, windowHeight, numSupersegments, mpiParameters.commSize)
@@ -141,6 +143,12 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         compositor.ViewOriginal = view
         compositor.invViewOriginal = Matrix4f(view).invert()
 
+    }
+
+    override fun gatherCompositedOutput(buffers: List<ByteBuffer>) {
+        val colorBuffer = buffers[0]
+        val depthBuffer = buffers[1]
+        val compositedVDILen = colorBuffer.remaining() / (4 * 4)
     }
 
     override fun setCompositorActivityStatus(setTo: Boolean) {
