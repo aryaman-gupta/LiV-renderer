@@ -203,10 +203,9 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      *
      * @param buffersToUpload The buffers to upload.
      * @param camera The camera to update.
-     * @param colorCounts If run-length encoding is used, the process-wise start points of the color data can be passed into this array. The size of array should be equal to the number of processes.
-     * @param depthCounts If run-length encoding is used, the process-wise start points of the depth data can be passed into this array. The size of array should be equal to the number of processes.
+     * @param elementCounts If run-length encoding is used, the process-wise start points of the color data can be passed into this array. The size of array should be equal to the number of processes.
      */
-    open fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, colorCounts: IntArray, depthCounts: IntArray) {
+    open fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, elementCounts: IntArray) {
         // Override to upload data and update necessary camera parameters for compositing
     }
 
