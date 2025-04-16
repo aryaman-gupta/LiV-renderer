@@ -91,7 +91,7 @@ extern "C" {
 
 // -------------------- 1) initializeVDIResources -----------------------
 JNIEXPORT jlong JNICALL
-Java_my_package_vdimpi_VDIMPIWrapper_initializeVDIResources(
+Java_graphics_scenery_natives_VDIMPIWrapper_initializeVDIResources(
     JNIEnv* env, jobject obj,
     jint colorCapacity,
     jint depthCapacity,
@@ -131,7 +131,7 @@ Java_my_package_vdimpi_VDIMPIWrapper_initializeVDIResources(
 
 // -------------------- 2) distributeColorVDI ---------------------------
 JNIEXPORT jobject JNICALL
-Java_my_package_vdimpi_VDIMPIWrapper_distributeColorVDI(
+Java_graphics_scenery_natives_VDIMPIWrapper_distributeColorVDI(
     JNIEnv* env, jobject obj,
     jlong nativeHandle,
     jobject colorVDI,         // local color buffer from Kotlin
@@ -203,7 +203,7 @@ Java_my_package_vdimpi_VDIMPIWrapper_distributeColorVDI(
 
 // -------------------- 3) distributeDepthVDI ---------------------------
 JNIEXPORT jobject JNICALL
-Java_my_package_vdimpi_VDIMPIWrapper_distributeDepthVDI(
+Java_graphics_scenery_natives_VDIMPIWrapper_distributeDepthVDI(
     JNIEnv* env, jobject obj,
     jlong nativeHandle,
     jobject depthVDI,
@@ -256,7 +256,7 @@ Java_my_package_vdimpi_VDIMPIWrapper_distributeDepthVDI(
 
 // -------------------- 4) distributePrefixVDI --------------------------
 JNIEXPORT jobject JNICALL
-Java_my_package_vdimpi_VDIMPIWrapper_distributePrefixVDI(
+Java_graphics_scenery_natives_VDIMPIWrapper_distributePrefixVDI(
     JNIEnv* env, jobject obj,
     jlong nativeHandle,
     jobject prefixVDI,
@@ -287,7 +287,7 @@ Java_my_package_vdimpi_VDIMPIWrapper_distributePrefixVDI(
 
 // -------------------- 5) releaseVDIResources --------------------------
 JNIEXPORT void JNICALL
-Java_my_package_vdimpi_VDIMPIWrapper_releaseVDIResources(
+Java_graphics_scenery_natives_VDIMPIWrapper_releaseVDIResources(
     JNIEnv* env, jobject obj,
     jlong nativeHandle)
 {
