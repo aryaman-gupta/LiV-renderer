@@ -3,6 +3,7 @@ package graphics.scenery.parallelization
 import graphics.scenery.Camera
 import graphics.scenery.VDICompositorNode
 import graphics.scenery.VolumeManagerManager
+import graphics.scenery.natives.VDIMPIWrapper
 import graphics.scenery.textures.Texture
 import net.imglib2.type.numeric.integer.IntType
 import net.imglib2.type.numeric.real.FloatType
@@ -35,6 +36,10 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
 
     override val compositedDepthsTextureName: String = "VDIsDepth"
     override val compositedColorsTextureName: String = "VDIsColor"
+
+    val nativeHandle = VDIMPIWrapper.initializeVDIResources(volumeManagerManager.getVDIVolumeManager().maxColorBufferSize,
+        volumeManagerManager.getVDIVolumeManager().maxDepthBufferSize,
+        volumeManagerManager.getVDIVolumeManager().prefixBufferSize)
 
     @Suppress("unused")
     private external fun distributeVDIs(subVDIColor: ByteBuffer, subVDIDepth: ByteBuffer, prefixSums: ByteBuffer, supersegmentCounts: IntArray, commSize: Int,
@@ -104,11 +109,16 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             logger.debug("Rank: $rank will send ${supersegmentCounts[commSize-1]} supersegments to process ${commSize-1}")
         }
 
-        distributeVDIs(colorBuffer, depthBuffer, prefixBuffer!!, supersegmentCounts, commSize, distributeColorPointer,
-            distributeDepthPointer, distributePrefixPointer, mpiPointer)
+        val distributedColors = VDIMPIWrapper.distributeColorVDI(nativeHandle, colorBuffer, supersegmentCounts, mpiParameters.commSize)
+        val distributedDepths = VDIMPIWrapper.distributeDepthVDI(nativeHandle, depthBuffer, supersegmentCounts, mpiParameters.commSize)
+        val prefixSet = VDIMPIWrapper.distributePrefixVDI(nativeHandle, prefixBuffer!!, mpiParameters.commSize)
+
+        val distributedBuffers = listOf(distributedColors, distributedDepths, prefixSet)
+
+        uploadForCompositing(distributedBuffers, camera, supersegmentCounts)
     }
 
-    override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, colorCounts: IntArray, depthCounts: IntArray) {
+    override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, elementCounts: IntArray) {
         // Upload data for compositing
         val compositor = compositorNode as VDICompositorNode
 
@@ -125,8 +135,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         logger.debug("Rank: ${mpiParameters.rank}: total supsegs recvd (including 0s): $supersegmentsRecvd")
 
         for (i in 0 until mpiParameters.commSize) {
-            compositor.totalSupersegmentsFrom[i] = colorCounts[i] / (4 * 4)
-            logger.debug("Rank ${mpiParameters.rank}: totalSupersegmentsFrom $i: ${colorCounts[i] / (4 * 4)}")
+            compositor.totalSupersegmentsFrom[i] = elementCounts[i] / (4 * 4)
+            logger.debug("Rank ${mpiParameters.rank}: totalSupersegmentsFrom $i: ${elementCounts[i] / (4 * 4)}")
         }
 
         compositor.material().textures[compositedColorsTextureName] = Texture(Vector3i(512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 4, contents = vdiSetColour, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
