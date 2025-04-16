@@ -2,13 +2,10 @@ package graphics.scenery.natives
 
 import java.nio.ByteBuffer
 
-class VDIMPIWrapper {
+object VDIMPIWrapper {
 
-    companion object {
-        init {
-            // Replace "vdi_mpi_wrapper" with whatever your native library is named:
-            System.loadLibrary("vdi_mpi_wrapper")
-        }
+    init {
+        System.loadLibrary("vdi_mpi_wrapper")
     }
 
     /**
