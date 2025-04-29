@@ -60,4 +60,11 @@ tasks {
     named<Test>("test") {
         useJUnitPlatform()
     }
+
+    test {
+        testLogging {
+            showStandardStreams = true
+            events("passed", "failed", "skipped")
+        }
+    }
 }
