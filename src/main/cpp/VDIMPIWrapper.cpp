@@ -30,58 +30,8 @@ struct VDIResources {
     void* prefixPtr = nullptr;
     int   prefixCap = 0;
 
-    // You may store other relevant data as needed:
-    // e.g., you might store communicator rank, etc.
-    // int rank;
-    // ...
+    bool communicatorSelfInitialized = false;
 };
-
-int distributeVariable(int *counts, int *countsRecv, void *sendBuf, void *recvBuf,
-                       int commSize, const std::string &purpose = "")
-{
-#if VERBOSE
-    std::cout << "Performing distribution of " << purpose << std::endl;
-#endif
-    // All-to-all for counts
-    MPI_Alltoall(counts, 1, MPI_INT, countsRecv, 1, MPI_INT, visualizationComm);
-
-    // set up the AllToAllv
-    int displacementSendSum = 0;
-    int *displacementSend   = new int[commSize];
-    int displacementRecvSum = 0;
-    int *displacementRecv   = new int[commSize];
-
-    int rank;
-    MPI_Comm_rank(visualizationComm, &rank);
-
-    for(int i = 0; i < commSize; i++) {
-        displacementSend[i] = displacementSendSum;
-        displacementSendSum += counts[i];
-
-        displacementRecv[i] = displacementRecvSum;
-        displacementRecvSum += countsRecv[i];
-    }
-
-    if (recvBuf == nullptr) {
-        std::cout << "This is an error! Receive buffer was null. Allocating now..."
-                  << std::endl;
-        int sum = 0;
-        for(int i = 0; i < commSize; i++) {
-            sum += countsRecv[i];
-        }
-        recvBuf = malloc(sum);  // Not recommended in real usage;
-                                // better to allocate up front or check capacity
-    }
-
-    MPI_Alltoallv(sendBuf, counts, displacementSend, MPI_BYTE,
-                  recvBuf, countsRecv, displacementRecv, MPI_BYTE,
-                  visualizationComm);
-
-    delete[] displacementSend;
-    delete[] displacementRecv;
-
-    return displacementRecvSum; // total bytes received
-}
 
 // ---------------------------------------------------------------------
 //  JNI methods
@@ -100,11 +50,6 @@ Java_graphics_scenery_natives_VDIMPIWrapper_initializeVDIResources(
 #if VERBOSE
     std::cout << "Initializing VDI resources" << std::endl;
 #endif
-
-    // If MPI not yet initialized, do so here (optional)
-    // int argc = 0;
-    // char** argv = nullptr;
-    // MPI_Init(&argc, &argv);
 
     // Allocate the struct
     VDIResources* resources = new VDIResources();
@@ -125,17 +70,54 @@ Java_graphics_scenery_natives_VDIMPIWrapper_initializeVDIResources(
               << " prefix=" << prefixCapacity << " bytes." << std::endl;
 #endif
 
+    int mpi_initialized = 0;
+    MPI_Initialized(&mpi_initialized);
+    if (!mpi_initialized) {
+        int argc = 0;
+        char** argv = nullptr;
+        MPI_Init(&argc, &argv);
+        resources->communicatorSelfInitialized = true;
+    }
+
     // Return pointer as a jlong
     return reinterpret_cast<jlong>(resources);
 }
 
-// -------------------- 2) distributeColorVDI ---------------------------
+// -------------------- 2) distributeSupersegmentCounts -----------------
+JNIEXPORT jintArray JNICALL
+Java_graphics_scenery_natives_VDIMPIWrapper_distributeSupersegmentCounts(
+    JNIEnv* env, jobject obj,
+    jlong nativeHandle,
+    jintArray supersegmentCounts,
+    jint commSize)
+{
+    // Extract the supersegment counts
+    jint* supsegCounts = env->GetIntArrayElements(supersegmentCounts, nullptr);
+
+    // Create a new array to receive the distributed counts
+    jintArray result = env->NewIntArray(commSize);
+    jint* receivedCounts = env->GetIntArrayElements(result, nullptr);
+
+    // Perform MPI_Alltoall to distribute the counts
+    MPI_Alltoall(supsegCounts, 1, MPI_INT, receivedCounts, 1, MPI_INT, visualizationComm);
+
+    // Release the arrays
+    env->ReleaseIntArrayElements(supersegmentCounts, supsegCounts, JNI_ABORT);
+    env->ReleaseIntArrayElements(result, receivedCounts, 0);
+
+    return result;
+}
+
+// -------------------- 3) distributeColorVDI ---------------------------
 JNIEXPORT jobject JNICALL
 Java_graphics_scenery_natives_VDIMPIWrapper_distributeColorVDI(
     JNIEnv* env, jobject obj,
     jlong nativeHandle,
     jobject colorVDI,         // local color buffer from Kotlin
-    jintArray supersegmentCounts,
+    jintArray counts,         // pre-calculated counts
+    jintArray displacements,  // pre-calculated displacements
+    jintArray countsRecv,     // pre-calculated receive counts
+    jintArray displacementsRecv, // pre-calculated receive displacements
     jint commSize)
 {
     VDIResources* res = reinterpret_cast<VDIResources*>(nativeHandle);
@@ -144,35 +126,30 @@ Java_graphics_scenery_natives_VDIMPIWrapper_distributeColorVDI(
         return nullptr;
     }
 
-    // Grab local color data + size
-    void* localPtr   = env->GetDirectBufferAddress(colorVDI);
-    jlong localBytes = env->GetDirectBufferCapacity(colorVDI);
+    // Grab local color data
+    void* localPtr = env->GetDirectBufferAddress(colorVDI);
 
-    // Extract the supersegment counts
-    jint* supsegCounts = env->GetIntArrayElements(supersegmentCounts, nullptr);
-    int   arrayLen     = env->GetArrayLength(supersegmentCounts);
+    // Extract the arrays
+    jint* countsArray = env->GetIntArrayElements(counts, nullptr);
+    jint* displacementsArray = env->GetIntArrayElements(displacements, nullptr);
+    jint* countsRecvArray = env->GetIntArrayElements(countsRecv, nullptr);
+    jint* displacementsRecvArray = env->GetIntArrayElements(displacementsRecv, nullptr);
 
-    // Build arrays for color counts
-    int *colorCounts     = new int[commSize];
-    int *colorCountsRecv = new int[commSize];
-
-    // For each rank, compute how many bytes we send (replicating your logic).
-    // e.g.,  supsegCounts[i] * 4 * 4
-    for(int i = 0; i < commSize; i++) {
-        colorCounts[i] = supsegCounts[i] * 4 * 4;
+    // Calculate total bytes to receive
+    int totalRecvdColor = 0;
+    for (int i = 0; i < commSize; i++) {
+        totalRecvdColor += countsRecvArray[i];
     }
 
-    // Now call distributeVariable
 #if PROFILING
     auto begin = std::chrono::high_resolution_clock::now();
 #endif
 
-    int totalRecvdColor = distributeVariable(
-        colorCounts, colorCountsRecv,
-        localPtr,        // sendBuf
-        res->colorPtr,   // recvBuf  (already allocated in init)
-        commSize,
-        "color"
+    // Perform MPI_Alltoallv
+    MPI_Alltoallv(
+        localPtr, countsArray, displacementsArray, MPI_BYTE,
+        res->colorPtr, countsRecvArray, displacementsRecvArray, MPI_BYTE,
+        visualizationComm
     );
 
 #if VERBOSE
@@ -180,19 +157,18 @@ Java_graphics_scenery_natives_VDIMPIWrapper_distributeColorVDI(
 #endif
 
 #if PROFILING
-    auto end   = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::high_resolution_clock::now();
     double localTime = std::chrono::duration<double>(end - begin).count();
     // ... do MPI_Reduce, store times, etc. if you want
 #endif
 
-    // Release pinned array
-    env->ReleaseIntArrayElements(supersegmentCounts, supsegCounts, JNI_ABORT);
-    delete[] colorCounts;
-    delete[] colorCountsRecv;
+    // Release arrays
+    env->ReleaseIntArrayElements(counts, countsArray, JNI_ABORT);
+    env->ReleaseIntArrayElements(displacements, displacementsArray, JNI_ABORT);
+    env->ReleaseIntArrayElements(countsRecv, countsRecvArray, JNI_ABORT);
+    env->ReleaseIntArrayElements(displacementsRecv, displacementsRecvArray, JNI_ABORT);
 
     // Return a ByteBuffer pointing to the color buffer in the struct.
-    // We typically pass how many bytes we actually used, e.g. totalRecvdColor
-    // but be mindful it might not exceed res->colorCap
     jlong usedBytes = (totalRecvdColor < res->colorCap)
                     ? totalRecvdColor
                     : res->colorCap;
@@ -201,13 +177,16 @@ Java_graphics_scenery_natives_VDIMPIWrapper_distributeColorVDI(
     return env->NewDirectByteBuffer(res->colorPtr, usedBytes);
 }
 
-// -------------------- 3) distributeDepthVDI ---------------------------
+// -------------------- 4) distributeDepthVDI ---------------------------
 JNIEXPORT jobject JNICALL
 Java_graphics_scenery_natives_VDIMPIWrapper_distributeDepthVDI(
     JNIEnv* env, jobject obj,
     jlong nativeHandle,
     jobject depthVDI,
-    jintArray supersegmentCounts,
+    jintArray counts,         // pre-calculated counts
+    jintArray displacements,  // pre-calculated displacements
+    jintArray countsRecv,     // pre-calculated receive counts
+    jintArray displacementsRecv, // pre-calculated receive displacements
     jint commSize)
 {
     VDIResources* res = reinterpret_cast<VDIResources*>(nativeHandle);
@@ -216,35 +195,36 @@ Java_graphics_scenery_natives_VDIMPIWrapper_distributeDepthVDI(
     }
 
     // Local depth data
-    void* localPtr   = env->GetDirectBufferAddress(depthVDI);
-    jlong localBytes = env->GetDirectBufferCapacity(depthVDI);
+    void* localPtr = env->GetDirectBufferAddress(depthVDI);
 
-    jint* supsegCounts = env->GetIntArrayElements(supersegmentCounts, nullptr);
+    // Extract the arrays
+    jint* countsArray = env->GetIntArrayElements(counts, nullptr);
+    jint* displacementsArray = env->GetIntArrayElements(displacements, nullptr);
+    jint* countsRecvArray = env->GetIntArrayElements(countsRecv, nullptr);
+    jint* displacementsRecvArray = env->GetIntArrayElements(displacementsRecv, nullptr);
 
-    // Compute depth counts
-    int* depthCounts     = new int[commSize];
-    int* depthCountsRecv = new int[commSize];
-
-    for(int i = 0; i < commSize; i++) {
-        depthCounts[i] = supsegCounts[i] * 4 * 2;  // from original code
+    // Calculate total bytes to receive
+    int totalRecvdDepth = 0;
+    for (int i = 0; i < commSize; i++) {
+        totalRecvdDepth += countsRecvArray[i];
     }
 
-    // MPI distribution
-    int totalRecvdDepth = distributeVariable(
-        depthCounts, depthCountsRecv,
-        localPtr,         // sendBuf
-        res->depthPtr,    // recvBuf
-        commSize,
-        "depth"
+    // Perform MPI_Alltoallv
+    MPI_Alltoallv(
+        localPtr, countsArray, displacementsArray, MPI_BYTE,
+        res->depthPtr, countsRecvArray, displacementsRecvArray, MPI_BYTE,
+        visualizationComm
     );
 
 #if VERBOSE
     std::cout << "Distribute depth received " << totalRecvdDepth << " bytes" << std::endl;
 #endif
 
-    env->ReleaseIntArrayElements(supersegmentCounts, supsegCounts, JNI_ABORT);
-    delete[] depthCounts;
-    delete[] depthCountsRecv;
+    // Release arrays
+    env->ReleaseIntArrayElements(counts, countsArray, JNI_ABORT);
+    env->ReleaseIntArrayElements(displacements, displacementsArray, JNI_ABORT);
+    env->ReleaseIntArrayElements(countsRecv, countsRecvArray, JNI_ABORT);
+    env->ReleaseIntArrayElements(displacementsRecv, displacementsRecvArray, JNI_ABORT);
 
     jlong usedBytes = (totalRecvdDepth < res->depthCap)
                     ? totalRecvdDepth
@@ -254,7 +234,7 @@ Java_graphics_scenery_natives_VDIMPIWrapper_distributeDepthVDI(
     return env->NewDirectByteBuffer(res->depthPtr, usedBytes);
 }
 
-// -------------------- 4) distributePrefixVDI --------------------------
+// -------------------- 5) distributePrefixVDI --------------------------
 JNIEXPORT jobject JNICALL
 Java_graphics_scenery_natives_VDIMPIWrapper_distributePrefixVDI(
     JNIEnv* env, jobject obj,
@@ -267,25 +247,21 @@ Java_graphics_scenery_natives_VDIMPIWrapper_distributePrefixVDI(
         return nullptr;
     }
 
-    void* localPtr   = env->GetDirectBufferAddress(prefixVDI);
+    void* localPtr = env->GetDirectBufferAddress(prefixVDI);
     jlong localBytes = env->GetDirectBufferCapacity(prefixVDI);
 
-#if VERBOSE
-    std::cout << "Distributing prefix with window "
-              << windowWidth << "x" << windowHeight << std::endl;
-#endif
-
-    int prefixImageSize = nativeHandle->prefixCap;
-
-     MPI_Alltoall(localPtr, prefixImageSize/commSize, MPI_BYTE,
-                  res->prefixPtr, prefixImageSize/commSize, MPI_BYTE,
-                  visualizationComm);
+    // Perform MPI_Alltoall
+    MPI_Alltoall(
+        localPtr, localBytes/commSize, MPI_BYTE,
+        res->prefixPtr, localBytes/commSize, MPI_BYTE,
+        visualizationComm
+    );
 
     // Return ByteBuffer
-    return env->NewDirectByteBuffer(res->prefixPtr, prefixImageSize);
+    return env->NewDirectByteBuffer(res->prefixPtr, localBytes);
 }
 
-// -------------------- 5) releaseVDIResources --------------------------
+// -------------------- 6) releaseVDIResources --------------------------
 JNIEXPORT void JNICALL
 Java_graphics_scenery_natives_VDIMPIWrapper_releaseVDIResources(
     JNIEnv* env, jobject obj,
@@ -305,10 +281,23 @@ Java_graphics_scenery_natives_VDIMPIWrapper_releaseVDIResources(
     delete[] reinterpret_cast<char*>(res->depthPtr);
     delete[] reinterpret_cast<char*>(res->prefixPtr);
 
-    // If you own MPI lifetime, you might finalize it here:
-    // MPI_Finalize();
+    if(res->communicatorSelfInitialized) {
+        MPI_Finalize();
+    }
 
     delete res;
 }
 
+/*
+ * Class:     graphics_scenery_natives_VDIMPIWrapper
+ * Method:    getCommSize
+ * Signature: ()I
+ */
+JNIEXPORT jint JNICALL Java_graphics_scenery_natives_VDIMPIWrapper_getCommSize(JNIEnv* env, jclass clazz) {
+    int comm_size = 0;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    return comm_size;
+}
+
 } // extern "C"
+
