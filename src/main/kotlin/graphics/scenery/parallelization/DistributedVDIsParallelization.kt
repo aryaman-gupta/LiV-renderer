@@ -41,12 +41,6 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         volumeManagerManager.getVDIVolumeManager().maxDepthBufferSize,
         volumeManagerManager.getVDIVolumeManager().prefixBufferSize)
 
-    @Suppress("unused")
-    private external fun distributeVDIs(subVDIColor: ByteBuffer, subVDIDepth: ByteBuffer, prefixSums: ByteBuffer, supersegmentCounts: IntArray, commSize: Int,
-                                        colPointer: Long, depthPointer: Long, prefixPointer: Long, mpiPointer: Long)
-    private external fun gatherCompositedVDIs(compositedVDIColor: ByteBuffer, compositedVDIDepth: ByteBuffer, compositedVDILen: Int, root: Int, myRank: Int, commSize: Int,
-                                              colPointer: Long, depthPointer: Long, vo: Int, mpiPointer: Long)
-
     override fun setupCompositor(): VDICompositorNode {
         return VDICompositorNode(windowWidth, windowHeight, numSupersegments, mpiParameters.commSize)
     }
@@ -93,7 +87,10 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
 
         val rank = mpiParameters.rank
         val commSize = mpiParameters.commSize
+
+        // Calculate supersegment counts
         val supersegmentCounts = IntArray(commSize)
+        val supersegmentCountsRecv = IntArray(commSize)
 
         preProcessBeforeDistribute {
             val prefixIntBuff = prefixBuffer!!.asIntBuffer()
@@ -109,13 +106,82 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             logger.debug("Rank: $rank will send ${supersegmentCounts[commSize-1]} supersegments to process ${commSize-1}")
         }
 
-        val distributedColors = VDIMPIWrapper.distributeColorVDI(nativeHandle, colorBuffer, supersegmentCounts, mpiParameters.commSize)
-        val distributedDepths = VDIMPIWrapper.distributeDepthVDI(nativeHandle, depthBuffer, supersegmentCounts, mpiParameters.commSize)
+        // First distribute supersegmentCounts via MPI
+        val distributedSupersegmentCounts = VDIMPIWrapper.distributeSupersegmentCounts(nativeHandle, supersegmentCounts, commSize)
+
+        // Copy the received counts to our local array
+        for (i in 0 until commSize) {
+            supersegmentCountsRecv[i] = distributedSupersegmentCounts[i]
+        }
+
+        // Calculate color counts and displacements
+        val colorCounts = IntArray(commSize)
+        val colorDisplacements = IntArray(commSize)
+        var colorDisplacementSum = 0
+
+        for (i in 0 until commSize) {
+            colorCounts[i] = supersegmentCounts[i] * 4 * 4
+            colorDisplacements[i] = colorDisplacementSum
+            colorDisplacementSum += colorCounts[i]
+        }
+
+        // Calculate depth counts and displacements
+        val depthCounts = IntArray(commSize)
+        val depthDisplacements = IntArray(commSize)
+        var depthDisplacementSum = 0
+
+        for (i in 0 until commSize) {
+            depthCounts[i] = supersegmentCounts[i] * 4 * 2
+            depthDisplacements[i] = depthDisplacementSum
+            depthDisplacementSum += depthCounts[i]
+        }
+
+        // Calculate receive counts and displacements
+        val colorCountsRecv = IntArray(commSize)
+        val colorDisplacementsRecv = IntArray(commSize)
+        var colorDisplacementRecvSum = 0
+
+        val depthCountsRecv = IntArray(commSize)
+        val depthDisplacementsRecv = IntArray(commSize)
+        var depthDisplacementRecvSum = 0
+
+        for (i in 0 until commSize) {
+            colorCountsRecv[i] = supersegmentCountsRecv[i] * 4 * 4
+            colorDisplacementsRecv[i] = colorDisplacementRecvSum
+            colorDisplacementRecvSum += colorCountsRecv[i]
+
+            depthCountsRecv[i] = supersegmentCountsRecv[i] * 4 * 2
+            depthDisplacementsRecv[i] = depthDisplacementRecvSum
+            depthDisplacementRecvSum += depthCountsRecv[i]
+        }
+
+        // Now perform the MPI_Alltoallv operations for color and depth
+        val distributedColors = VDIMPIWrapper.distributeColorVDI(
+            nativeHandle,
+            colorBuffer,
+            colorCounts,
+            colorDisplacements,
+            colorCountsRecv,
+            colorDisplacementsRecv,
+            commSize
+        )
+
+        val distributedDepths = VDIMPIWrapper.distributeDepthVDI(
+            nativeHandle,
+            depthBuffer,
+            depthCounts,
+            depthDisplacements,
+            depthCountsRecv,
+            depthDisplacementsRecv,
+            commSize
+        )
+
+        // Distribute prefix buffer
         val prefixSet = VDIMPIWrapper.distributePrefixVDI(nativeHandle, prefixBuffer!!, mpiParameters.commSize)
 
         val distributedBuffers = listOf(distributedColors, distributedDepths, prefixSet)
 
-        uploadForCompositing(distributedBuffers, camera, supersegmentCounts)
+        uploadForCompositing(distributedBuffers, camera, supersegmentCountsRecv.map { it * 4 * 4 }.toIntArray())
     }
 
     override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, elementCounts: IntArray) {
