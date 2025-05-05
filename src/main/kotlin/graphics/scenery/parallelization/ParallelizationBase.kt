@@ -96,7 +96,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      */
     protected val finalBuffers: MutableList<ByteBuffer> = mutableListOf()
 
-    private val rootRank = 0
+    val rootRank = 0
+    private set
 
     protected fun isRootProcess(): Boolean {
         return mpiParameters.rank == rootRank
