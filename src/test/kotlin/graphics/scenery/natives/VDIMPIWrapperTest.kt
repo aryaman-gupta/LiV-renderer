@@ -276,7 +276,7 @@ class VDIMPIWrapperTest {
         val windowHeight = 100
         val maxSupersegments = 10
 
-        val colorCapacity = windowWidth * windowHeight * 4 * maxSupersegments * 2
+        val colorCapacity = windowWidth * windowHeight * 4 * maxSupersegments * 4
         val depthCapacity = windowWidth * windowHeight * 2 * maxSupersegments * 2
         val prefixCapacity = windowWidth * windowHeight * 4
 
@@ -330,7 +330,7 @@ class VDIMPIWrapperTest {
         val receivedColors = VDIMPIWrapper.distributeColorVDI(
             handle,
             colorBuffer,
-            supersegmentCounts,
+            colorCounts,
             colorDisplacements,
             colorReceiveCounts,
             colorReceiveDisplacements,
@@ -340,7 +340,7 @@ class VDIMPIWrapperTest {
         val receivedDepths = VDIMPIWrapper.distributeDepthVDI(
             handle,
             depthBuffer,
-            supersegmentCounts,
+            depthCounts,
             depthDisplacements,
             depthReceiveCounts,
             depthReceiveDisplacements,
