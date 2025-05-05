@@ -39,7 +39,9 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
 
     val nativeHandle = VDIMPIWrapper.initializeVDIResources(volumeManagerManager.getVDIVolumeManager().maxColorBufferSize,
         volumeManagerManager.getVDIVolumeManager().maxDepthBufferSize,
-        volumeManagerManager.getVDIVolumeManager().prefixBufferSize)
+        volumeManagerManager.getVDIVolumeManager().prefixBufferSize,
+        volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize,
+        volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize)
 
     override fun setupCompositor(): VDICompositorNode {
         return VDICompositorNode(windowWidth, windowHeight, numSupersegments, mpiParameters.commSize)
@@ -225,6 +227,27 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         val colorBuffer = buffers[0]
         val depthBuffer = buffers[1]
         val compositedVDILen = colorBuffer.remaining() / (4 * 4)
+
+        if(colorBuffer.remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize/mpiParameters.commSize) {
+            logger.error("Color buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize/mpiParameters.commSize}, got ${colorBuffer.remaining()}")
+        }
+
+        if(depthBuffer.remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize/mpiParameters.commSize) {
+            logger.error("Depth buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize/mpiParameters.commSize}, got ${depthBuffer.remaining()}")
+        }
+
+        val gatheredColors = VDIMPIWrapper.gatherColorVDI(nativeHandle, colorBuffer, colorBuffer.remaining(), rootRank, colorBuffer.remaining() * mpiParameters.commSize)
+        val gatheredDepths = VDIMPIWrapper.gatherDepthVDI(nativeHandle, depthBuffer, depthBuffer.remaining(), rootRank, depthBuffer.remaining() * mpiParameters.commSize)
+
+        if (isRootProcess()) {
+            // put the composited colors into the final composited buffer list
+            gatheredColors?.let {
+                finalBuffers.add(it)
+            }
+            gatheredDepths?.let {
+                finalBuffers.add(it)
+            }
+        }
     }
 
     override fun setCompositorActivityStatus(setTo: Boolean) {
