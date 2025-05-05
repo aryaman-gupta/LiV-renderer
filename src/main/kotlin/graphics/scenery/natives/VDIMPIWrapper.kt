@@ -19,7 +19,8 @@ object VDIMPIWrapper {
      * @param prefixCapacity Maximum size of the prefix buffer in bytes
      * @return Native handle to the allocated resources
      */
-    external fun initializeVDIResources(colorCapacity: Int, depthCapacity: Int, prefixCapacity: Int): Long
+    external fun initializeVDIResources(colorCapacity: Int, depthCapacity: Int, prefixCapacity: Int,
+                                        gatherColorCapacity: Int, gatherDepthCapacity: Int): Long
 
     /**
      * Distribute supersegment counts via MPI_Alltoall.
@@ -87,6 +88,42 @@ object VDIMPIWrapper {
     external fun distributePrefixVDI(nativeHandle: Long, prefixVDI: ByteBuffer, commSize: Int): ByteBuffer
 
     /**
+     * Gather color VDI data via MPI_Gather.
+     *
+     * @param nativeHandle Handle to the native resources
+     * @param colorVDI ByteBuffer containing the local color data to send
+     * @param sendCount Number of bytes to send from each process
+     * @param root Root rank for gather
+     * @param totalRecvBytes Total bytes expected at root (sendCount * commSize)
+     * @return ByteBuffer containing the gathered color data at root, or null on other ranks
+     */
+    external fun gatherColorVDI(
+        nativeHandle: Long,
+        colorVDI: ByteBuffer,
+        sendCount: Int,
+        root: Int,
+        totalRecvBytes: Int
+    ): ByteBuffer?
+
+    /**
+     * Gather depth VDI data via MPI_Gather.
+     *
+     * @param nativeHandle Handle to the native resources
+     * @param depthVDI ByteBuffer containing the local depth data to send
+     * @param sendCount Number of bytes to send from each process
+     * @param root Root rank for gather
+     * @param totalRecvBytes Total bytes expected at root (sendCount * commSize)
+     * @return ByteBuffer containing the gathered depth data at root, or null on other ranks
+     */
+    external fun gatherDepthVDI(
+        nativeHandle: Long,
+        depthVDI: ByteBuffer,
+        sendCount: Int,
+        root: Int,
+        totalRecvBytes: Int
+    ): ByteBuffer?
+
+    /**
      * Retrieves the size of the MPI communicator.
      *
      * @return The number of processes in the MPI communicator.
@@ -101,4 +138,3 @@ object VDIMPIWrapper {
      */
     external fun releaseVDIResources(nativeHandle: Long)
 }
-

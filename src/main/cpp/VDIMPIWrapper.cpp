@@ -30,6 +30,13 @@ struct VDIResources {
     void* prefixPtr = nullptr;
     int   prefixCap = 0;
 
+    // Buffers for gather operations
+    void* colorGatherPtr = nullptr;
+    int   colorGatherCap = 0;
+
+    void* depthGatherPtr = nullptr;
+    int   depthGatherCap = 0;
+
     bool communicatorSelfInitialized = false;
 };
 
@@ -45,7 +52,9 @@ Java_graphics_scenery_natives_VDIMPIWrapper_initializeVDIResources(
     JNIEnv* env, jobject obj,
     jint colorCapacity,
     jint depthCapacity,
-    jint prefixCapacity)
+    jint prefixCapacity,
+    jint gatherColorCapacity,
+    jint gatherDepthCapacity)
 {
 #if VERBOSE
     std::cout << "Initializing VDI resources" << std::endl;
@@ -63,6 +72,13 @@ Java_graphics_scenery_natives_VDIMPIWrapper_initializeVDIResources(
 
     resources->prefixPtr = new char[prefixCapacity];
     resources->prefixCap = prefixCapacity;
+
+    // Allocate gather buffers (same size as color/depth for now)
+    resources->colorGatherPtr  = new char[colorCapacity];
+    resources->colorGatherCap  = gatherColorCapacity;
+
+    resources->depthGatherPtr  = new char[depthCapacity];
+    resources->depthGatherCap  = gatherDepthCapacity;
 
 #if VERBOSE
     std::cout << "Allocated color=" << colorCapacity
@@ -261,6 +277,94 @@ Java_graphics_scenery_natives_VDIMPIWrapper_distributePrefixVDI(
     return env->NewDirectByteBuffer(res->prefixPtr, localBytes);
 }
 
+// -------------------- gatherColorVDI ---------------------------
+JNIEXPORT jobject JNICALL
+Java_graphics_scenery_natives_VDIMPIWrapper_gatherColorVDI(
+    JNIEnv* env, jobject obj,
+    jlong nativeHandle,
+    jobject colorVDI,    // local color buffer
+    jint sendCount,      // bytes to send from each process
+    jint root,           // root rank
+    jint totalRecvBytes  // total bytes expected at root
+)
+{
+    VDIResources* res = reinterpret_cast<VDIResources*>(nativeHandle);
+    if(!res) {
+        return nullptr;
+    }
+
+    void* localPtr = env->GetDirectBufferAddress(colorVDI);
+
+    // Only root receives, others can pass nullptr
+    void* recvPtr = nullptr;
+    if (sendCount > 0 && totalRecvBytes > 0 && res->colorGatherPtr && res->colorGatherCap >= totalRecvBytes) {
+        int rank;
+        MPI_Comm_rank(visualizationComm, &rank);
+        if (rank == root) {
+            recvPtr = res->colorGatherPtr;
+        }
+    }
+
+    MPI_Gather(
+        localPtr, sendCount, MPI_BYTE,
+        recvPtr, sendCount, MPI_BYTE,
+        root, visualizationComm
+    );
+
+    // Only root returns a buffer, others return null
+    int rank;
+    MPI_Comm_rank(visualizationComm, &rank);
+    if (rank == root) {
+        return env->NewDirectByteBuffer(res->colorGatherPtr, totalRecvBytes);
+    } else {
+        return nullptr;
+    }
+}
+
+// -------------------- gatherDepthVDI ---------------------------
+JNIEXPORT jobject JNICALL
+Java_graphics_scenery_natives_VDIMPIWrapper_gatherDepthVDI(
+    JNIEnv* env, jobject obj,
+    jlong nativeHandle,
+    jobject depthVDI,    // local depth buffer
+    jint sendCount,      // bytes to send from each process
+    jint root,           // root rank
+    jint totalRecvBytes  // total bytes expected at root
+)
+{
+    VDIResources* res = reinterpret_cast<VDIResources*>(nativeHandle);
+    if(!res) {
+        return nullptr;
+    }
+
+    void* localPtr = env->GetDirectBufferAddress(depthVDI);
+
+    // Only root receives, others can pass nullptr
+    void* recvPtr = nullptr;
+    if (sendCount > 0 && totalRecvBytes > 0 && res->depthGatherPtr && res->depthGatherCap >= totalRecvBytes) {
+        int rank;
+        MPI_Comm_rank(visualizationComm, &rank);
+        if (rank == root) {
+            recvPtr = res->depthGatherPtr;
+        }
+    }
+
+    MPI_Gather(
+        localPtr, sendCount, MPI_BYTE,
+        recvPtr, sendCount, MPI_BYTE,
+        root, visualizationComm
+    );
+
+    // Only root returns a buffer, others return null
+    int rank;
+    MPI_Comm_rank(visualizationComm, &rank);
+    if (rank == root) {
+        return env->NewDirectByteBuffer(res->depthGatherPtr, totalRecvBytes);
+    } else {
+        return nullptr;
+    }
+}
+
 // -------------------- 6) releaseVDIResources --------------------------
 JNIEXPORT void JNICALL
 Java_graphics_scenery_natives_VDIMPIWrapper_releaseVDIResources(
@@ -280,6 +384,10 @@ Java_graphics_scenery_natives_VDIMPIWrapper_releaseVDIResources(
     delete[] reinterpret_cast<char*>(res->colorPtr);
     delete[] reinterpret_cast<char*>(res->depthPtr);
     delete[] reinterpret_cast<char*>(res->prefixPtr);
+
+    // Free gather buffers
+    delete[] reinterpret_cast<char*>(res->colorGatherPtr);
+    delete[] reinterpret_cast<char*>(res->depthGatherPtr);
 
     if(res->communicatorSelfInitialized) {
         MPI_Finalize();
