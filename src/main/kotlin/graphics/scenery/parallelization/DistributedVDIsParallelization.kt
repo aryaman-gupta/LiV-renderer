@@ -5,6 +5,7 @@ import graphics.scenery.VDICompositorNode
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.VDIMPIWrapper
 import graphics.scenery.textures.Texture
+import graphics.scenery.utils.extensions.applyVulkanCoordinateSystem
 import net.imglib2.type.numeric.integer.IntType
 import net.imglib2.type.numeric.real.FloatType
 import org.joml.Matrix4f
@@ -191,6 +192,20 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, elementCounts: IntArray) {
         // Upload data for compositing
         val compositor = compositorNode as VDICompositorNode
+
+//        compositor.nw = volumeManagerManager.getVolumeManager().shaderProperties.get("nw") as Float
+        compositor.nw = 0.1f
+
+        compositor.ProjectionOriginal = Matrix4f(camera.spatial().projection).applyVulkanCoordinateSystem()
+        compositor.invProjectionOriginal = Matrix4f(camera.spatial().projection).applyVulkanCoordinateSystem().invert()
+
+        compositor.numProcesses = mpiParameters.commSize
+        compositor.vdiWidth = windowWidth
+        compositor.vdiHeight = windowHeight
+        compositor.isCompact = true
+
+        compositor.ViewOriginal = camera.spatial().getTransformation()
+        compositor.invViewOriginal = Matrix4f(camera.spatial().getTransformation()).invert()
 
         if (buffersToUpload.size != 3) {
             Exception("Expected 3 buffers, got ${buffersToUpload.size}").printStackTrace()
