@@ -97,7 +97,6 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     protected val finalBuffers: MutableList<ByteBuffer> = mutableListOf()
 
     val rootRank = 0
-    private set
 
     protected fun isRootProcess(): Boolean {
         return mpiParameters.rank == rootRank
@@ -113,7 +112,17 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     }
 
     init {
-        compositorNode = setupCompositor()
+        if(explicitCompositingStep) {
+            compositorNode = setupCompositor()
+            if(compositorNode == null) {
+                throw RuntimeException("Compositor node is null. Please ensure that the setupCompositor() method is overridden in the derived class" +
+                        "if explicitCompositingStep is set to true.")
+            }
+            compositorNode!!.visible = true
+
+            val scene = camera.getScene()
+            scene!!.addChild(compositorNode!!)
+        }
 
         volumeManagerManager.getVolumeManager().hub?.let {
             it.get<Renderer>()?.let { renderer ->
@@ -217,7 +226,9 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      * @param setTo Boolean value to set the compositor activity status to.
      */
     open fun setCompositorActivityStatus(setTo: Boolean) {
-
+        if (explicitCompositingStep) {
+            throw UnsupportedOperationException("setCompositorActivityStatus must be overridden when explicitCompositingStep is true.")
+        }
     }
 
     abstract fun streamOutput()
