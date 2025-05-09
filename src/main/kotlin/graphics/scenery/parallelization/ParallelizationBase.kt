@@ -103,7 +103,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     }
 
     /**
-     * Sets up the compositor node. Only called if the derived class sets [explicitCompositingStep] to true.
+     * Sets up the compositor node. Must be overridden if the derived class sets [explicitCompositingStep] to true.
      *
      * @return The compositor node.
      */
@@ -112,12 +112,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     }
 
     init {
-        if(explicitCompositingStep) {
-            compositorNode = setupCompositor()
-            if(compositorNode == null) {
-                throw RuntimeException("Compositor node is null. Please ensure that the setupCompositor() method is overridden in the derived class" +
-                        "if explicitCompositingStep is set to true.")
-            }
+        compositorNode = setupCompositor()
+        compositorNode?.let {
             compositorNode!!.visible = true
 
             val scene = camera.getScene()
