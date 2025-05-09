@@ -22,6 +22,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     override val firstPassFlag = "doThreshSearch"
     override val secondPassFlag = "doGeneration"
 
+    override val explicitCompositingStep = true
+
     private var prefixBuffer: ByteBuffer? = null
     private var totalSupersegmentsGenerated = 0
 
@@ -34,8 +36,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     var distributePrefixPointer: Long = 0L
     var mpiPointer: Long = 0L
 
-    override val compositedDepthsTextureName: String = "VDIsDepth"
-    override val compositedColorsTextureName: String = "VDIsColor"
+    override val compositedColorsTextureName: String = "CompositedVDIColor"
+    override val compositedDepthsTextureName: String = "CompositedVDIDepth"
 
     val nativeHandle = VDIMPIWrapper.initializeVDIResources(volumeManagerManager.getVDIVolumeManager().maxColorBufferSize,
         volumeManagerManager.getVDIVolumeManager().maxDepthBufferSize,
