@@ -3,6 +3,7 @@ package graphics.scenery.natives
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.lwjgl.system.MemoryUtil
+import org.stringtemplate.v4.compiler.STParser
 
 /**
  * Tests for the VDIMPIWrapper class.
@@ -26,7 +27,7 @@ class VDIMPIWrapperTest {
         val depthCapacity = 512
         val prefixCapacity = 256
 
-        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity)
+        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity, colorCapacity, depthCapacity)
 
         // Verify that a valid handle is returned
         assertTrue(handle != 0L, "Handle should be non-zero")
@@ -47,7 +48,7 @@ class VDIMPIWrapperTest {
         val colorCapacity = 1024
         val depthCapacity = 512
         val prefixCapacity = 256
-        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity)
+        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity, colorCapacity, depthCapacity)
 
         val commSize = VDIMPIWrapper.getCommSize()
 
@@ -82,7 +83,7 @@ class VDIMPIWrapperTest {
         val colorCapacity = 1024
         val depthCapacity = 512
         val prefixCapacity = 256
-        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity)
+        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity, colorCapacity, depthCapacity)
 
         val commSize = VDIMPIWrapper.getCommSize()
 
@@ -162,7 +163,7 @@ class VDIMPIWrapperTest {
         val colorCapacity = 1024
         val depthCapacity = 512
         val prefixCapacity = 256
-        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity)
+        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity, colorCapacity, depthCapacity)
 
         val commSize = VDIMPIWrapper.getCommSize()
 
@@ -239,7 +240,7 @@ class VDIMPIWrapperTest {
         val colorCapacity = 1024
         val depthCapacity = 512
         val prefixCapacity = 256
-        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity)
+        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity, colorCapacity, depthCapacity)
 
         val commSize = VDIMPIWrapper.getCommSize()
 
@@ -280,7 +281,7 @@ class VDIMPIWrapperTest {
         val depthCapacity = windowWidth * windowHeight * 2 * maxSupersegments * 2
         val prefixCapacity = windowWidth * windowHeight * 4
 
-        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity)
+        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity, colorCapacity, depthCapacity)
         val commSize = VDIMPIWrapper.getCommSize()
 
         // assuming all VDIs are full and there is no empty space (effectively no run-length compression)
@@ -364,7 +365,7 @@ class VDIMPIWrapperTest {
         val colorCapacity = 1024
         val depthCapacity = 512
         val prefixCapacity = 256
-        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity)
+        val handle = VDIMPIWrapper.initializeVDIResources(colorCapacity, depthCapacity, prefixCapacity, colorCapacity, depthCapacity)
 
         // Verify that a valid handle is returned
         assertTrue(handle != 0L, "Handle should be non-zero")
