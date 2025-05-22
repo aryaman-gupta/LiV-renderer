@@ -1,7 +1,5 @@
 package graphics.scenery.tests.interfaces
 
-import graphics.scenery.Camera
-import graphics.scenery.FullscreenObject
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.interfaces.RenderingInterfaceBase
 import graphics.scenery.parallelization.ParallelizationBase
@@ -11,8 +9,8 @@ class NaiveInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int, nodeRa
 
     override var outputProcessingType = OutputProcessingType.DISPLAY
 
-    override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
-        return TestParallelization(volumeManagerManager, mpiParameters, camera)
+    override fun initializeParallelizationScheme(): ParallelizationBase {
+        return TestParallelization(volumeManagerManager, mpiParameters, scene)
     }
 
     override fun setupVolumeManagerManager() {

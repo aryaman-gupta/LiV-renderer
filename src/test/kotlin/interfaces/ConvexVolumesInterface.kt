@@ -1,6 +1,5 @@
 package graphics.scenery.tests.interfaces
 
-import graphics.scenery.Camera
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.interfaces.RenderingInterfaceBase
 import graphics.scenery.parallelization.ConvexVolumesParallelization
@@ -20,8 +19,8 @@ class ConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int
         processorDimensions[processorId] = Vector3f(dimensions[0], dimensions[1], dimensions[2])
     }
 
-    override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
-        return ConvexVolumesParallelization(volumeManagerManager, mpiParameters, camera)
+    override fun initializeParallelizationScheme(): ParallelizationBase {
+        return ConvexVolumesParallelization(volumeManagerManager, mpiParameters, scene)
     }
 
     override fun setupVolumeManagerManager() {
