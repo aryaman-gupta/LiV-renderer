@@ -3,6 +3,7 @@ package graphics.scenery.parallelization
 import graphics.scenery.Camera
 import graphics.scenery.Mesh
 import graphics.scenery.RichNode
+import graphics.scenery.Scene
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.backends.Renderer
 import graphics.scenery.natives.MPIJavaWrapper
@@ -10,6 +11,7 @@ import graphics.scenery.textures.Texture
 import graphics.scenery.utils.SystemHelpers
 import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.utils.lazyLogger
+import graphics.scenery.volumes.BufferedVolume
 import graphics.scenery.volumes.DummyVolume
 import graphics.scenery.volumes.Volume
 import org.joml.Quaternionf
@@ -37,7 +39,7 @@ data class MPIParameters(
  * @property volumeManagerManager The manager responsible for handling volume data.
  * @property mpiParameters The MPI parameters for the current process.
  */
-abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManager, val mpiParameters: MPIParameters, val camera: Camera) {
+abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManager, val mpiParameters: MPIParameters, val scene: Scene) {
 
     val logger by lazyLogger()
 
@@ -116,8 +118,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         compositorNode?.let {
             compositorNode!!.visible = true
 
-            val scene = camera.getScene()
-            scene!!.addChild(compositorNode!!)
+            scene.addChild(compositorNode!!)
         }
 
         volumeManagerManager.getVolumeManager().hub?.let {
@@ -384,6 +385,12 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
     fun synchronizeCamera() {
         val cameraData = ByteBuffer.allocate(7 * 4).order(ByteOrder.LITTLE_ENDIAN)
+
+        if (scene.findObserver() == null) {
+            IllegalStateException("Camera not found in scene")
+        }
+        val camera = scene.findObserver() as Camera
+
         cameraData.putFloat(camera.spatial().position.x)
         cameraData.putFloat(camera.spatial().position.y)
         cameraData.putFloat(camera.spatial().position.z)
@@ -419,18 +426,18 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      * The root process serializes this transfer function and broadcasts it via MPI.
      * All processes then update each of their volumes with the received transfer function.
      */
-    fun synchronizeTransferFunction() {
+    fun synchronizeTransferFunction(volumes: HashMap<Int, BufferedVolume?>) {
         val volumeManager = volumeManagerManager.getVolumeManager()
 
         // Only the root process serializes the transfer function
         val serializedTF = if(isRootProcess()) {
-            val dummyVolume = camera.getScene()!!.find("DummyVolume") as? DummyVolume
+            val dummyVolume = scene.find("DummyVolume") as? DummyVolume
             if (dummyVolume == null) {
                 throw IllegalStateException("DummyVolume not found in the scene. Please make sure client is running" +
                         " and connected, or use in testing mode by setting -Dscenery.LiV-Test-Benchmark=true")
             }
 
-            val tfData = dummyVolume!!.transferFunction.controlPoints()
+            val tfData = dummyVolume.transferFunction.controlPoints()
 
             ByteBuffer.allocate(tfData.size * 2 * 4).order(ByteOrder.LITTLE_ENDIAN).apply {
                 tfData.forEach { cp ->
@@ -451,9 +458,10 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         val tfBuffer = if (isRootProcess()) serializedTF else ByteArray(tfSizeInt)
         MPIJavaWrapper.bcast(tfBuffer, 0)
 
-        // All processes (including root) update their Dummy volume's transfer function
-        volumeManager.nodes.forEach { volume ->
+        for(i in 0 until volumes.size) {
             val tfData = ByteBuffer.wrap(tfBuffer).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+
+            val volume = volumes[i] as Volume
 
             volume.transferFunction.clear()
 
