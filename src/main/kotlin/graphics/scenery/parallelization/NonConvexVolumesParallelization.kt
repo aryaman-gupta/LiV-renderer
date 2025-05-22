@@ -1,13 +1,14 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
+import graphics.scenery.Scene
 import graphics.scenery.Settings
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.IceTWrapper
 import graphics.scenery.utils.VideoEncoder
 import java.nio.ByteBuffer
 
-class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera) : ParallelizationBase (volumeManagerManager, mpiParameters, camera) {
+class NonConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, scene: Scene) : ParallelizationBase (volumeManagerManager, mpiParameters, scene) {
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false

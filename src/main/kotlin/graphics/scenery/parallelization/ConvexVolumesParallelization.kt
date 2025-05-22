@@ -1,6 +1,7 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
+import graphics.scenery.Scene
 import graphics.scenery.Settings
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.IceTWrapper
@@ -8,7 +9,7 @@ import graphics.scenery.utils.VideoEncoder
 import org.joml.Vector3f
 import java.nio.ByteBuffer
 
-class ConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera) : ParallelizationBase (volumeManagerManager, mpiParameters, camera) {
+class ConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, scene: Scene) : ParallelizationBase (volumeManagerManager, mpiParameters, scene) {
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false
@@ -39,6 +40,12 @@ class ConvexVolumesParallelization(volumeManagerManager: VolumeManagerManager, m
         if (buffers.size != 1) {
             throw IllegalArgumentException("Expected exactly one buffer but got ${buffers.size}")
         }
+
+        if(scene.findObserver() == null) {
+            throw IllegalStateException("No camera found in scene.")
+        }
+
+        val camera = scene.findObserver() as Camera
 
         val cameraPosition = FloatArray(3)
         cameraPosition[0] = camera.spatial().position.x

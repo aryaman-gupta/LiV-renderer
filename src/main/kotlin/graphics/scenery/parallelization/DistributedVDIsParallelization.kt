@@ -1,6 +1,7 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
+import graphics.scenery.Scene
 import graphics.scenery.VDICompositorNode
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.VDIMPIWrapper
@@ -15,8 +16,8 @@ import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 import kotlin.math.ceil
 
-class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera)
-    : ParallelizationBase(volumeManagerManager, mpiParameters, camera) {
+class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, scene: Scene)
+    : ParallelizationBase(volumeManagerManager, mpiParameters, scene) {
 
     override val twoPassRendering = true
 
@@ -186,7 +187,12 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
 
         val distributedBuffers = listOf(distributedColors, distributedDepths, prefixSet)
 
-        uploadForCompositing(distributedBuffers, camera, supersegmentCountsRecv.map { it * 4 * 4 }.toIntArray())
+        val camera = scene.findObserver()
+        if (camera == null) {
+            IllegalStateException("Camera not found in scene")
+        }
+
+        uploadForCompositing(distributedBuffers, camera as Camera, supersegmentCountsRecv.map { it * 4 * 4 }.toIntArray())
     }
 
     override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, elementCounts: IntArray) {
