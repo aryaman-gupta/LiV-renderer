@@ -10,6 +10,8 @@ import graphics.scenery.textures.Texture
 import graphics.scenery.utils.SystemHelpers
 import graphics.scenery.utils.extensions.fetchFromGPU
 import graphics.scenery.utils.lazyLogger
+import graphics.scenery.volumes.DummyVolume
+import graphics.scenery.volumes.Volume
 import org.joml.Quaternionf
 import org.joml.Vector3f
 import org.joml.Vector3i
@@ -411,5 +413,51 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
         previousCameraPosition = camera.spatial().position
         previousCameraRotation = camera.spatial().rotation
+    }
+
+    /**
+     * Synchronizes the transfer function between the processes.
+     * The root process uses the [DummyVolume] to access the latest transfer function from the client.
+     * The root process serializes this transfer function and broadcasts it via MPI.
+     * All processes then update each of their volumes with the received transfer function.
+     */
+    fun synchronizeTransferFunction() {
+        val volumeManager = volumeManagerManager.getVolumeManager()
+
+        // Only the root process serializes the transfer function
+        val serializedTF = if(isRootProcess()) {
+            val dummyVolume = camera.getScene()!!.find("DummyVolume") as? DummyVolume
+
+            val tfData = dummyVolume!!.transferFunction.controlPoints()
+
+            ByteBuffer.allocate(tfData.size * 2 * 4).order(ByteOrder.LITTLE_ENDIAN).apply {
+                tfData.forEach { cp ->
+                    putFloat(cp.value)
+                    putFloat(cp.factor)
+                }
+            }.array()
+        } else {
+            ByteArray(0)
+        }
+
+        // Broadcast the size first
+        val tfSize = if (isRootProcess()) ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(serializedTF.size).array() else ByteArray(4)
+        MPIJavaWrapper.bcast(tfSize, 0)
+        val tfSizeInt = ByteBuffer.wrap(tfSize).order(ByteOrder.LITTLE_ENDIAN).int
+
+        // Prepare buffer for receiving/sending
+        val tfBuffer = if (isRootProcess()) serializedTF else ByteArray(tfSizeInt)
+        MPIJavaWrapper.bcast(tfBuffer, 0)
+
+        // All processes (including root) update their Dummy volume's transfer function
+        volumeManager.nodes.forEach { volume ->
+            val tfData = ByteBuffer.wrap(tfBuffer).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+
+            volume.transferFunction.clear()
+
+            for (i in 0 until tfSizeInt / 8) {
+                volume.transferFunction.addControlPoint(tfData[i * 2], tfData[i * 2 + 1])
+            }
+        }
     }
 }
