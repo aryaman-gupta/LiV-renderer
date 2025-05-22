@@ -98,8 +98,6 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      */
     protected val finalBuffers: MutableList<ByteBuffer> = mutableListOf()
 
-    val rootRank = 0
-
     protected fun isRootProcess(): Boolean {
         return mpiParameters.rank == rootRank
     }
@@ -427,6 +425,10 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         // Only the root process serializes the transfer function
         val serializedTF = if(isRootProcess()) {
             val dummyVolume = camera.getScene()!!.find("DummyVolume") as? DummyVolume
+            if (dummyVolume == null) {
+                throw IllegalStateException("DummyVolume not found in the scene. Please make sure client is running" +
+                        " and connected, or use in testing mode by setting -Dscenery.LiV-Test-Benchmark=true")
+            }
 
             val tfData = dummyVolume!!.transferFunction.controlPoints()
 
@@ -459,5 +461,9 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
                 volume.transferFunction.addControlPoint(tfData[i * 2], tfData[i * 2 + 1])
             }
         }
+    }
+
+    companion object {
+        const val rootRank = 0
     }
 }
