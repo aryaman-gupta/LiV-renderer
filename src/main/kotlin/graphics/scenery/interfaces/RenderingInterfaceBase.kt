@@ -165,21 +165,27 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
 
     abstract fun setupVolumeManagerManager()
 
-    abstract fun initializeParallelizationScheme(camera: Camera): ParallelizationBase
+    abstract fun initializeParallelizationScheme(): ParallelizationBase
 
     open fun additionalSceneSetup() {}
 
     open fun runAsynchronously() {}
 
     override fun init() {
+
+        if (mpiParameters.rank == ParallelizationBase.rootRank && !(Settings().get("LiV-Test-Benchmark", false))) {
+            Settings().set("ServerAddress", "tcp://127.0.0.1")
+            Settings().set("RemoteCamera", true)
+        }
         renderer = hub.add(Renderer.createRenderer(hub, applicationName, scene, windowWidth, windowHeight))
 
         setupVolumeManagerManager()
 
         volumeManagerInitialized.set(true)
 
-        val cam: Camera = DetachedHeadCamera()
+        val cam: Camera
         if(!Settings().get("RemoteCamera", false)) {
+            cam = DetachedHeadCamera()
             with(cam) {
                 spatial().position = Vector3f(-2.300E+0f, -6.402E+0f, 1.100E+0f)
                 spatial().rotation = Quaternionf(2.495E-1, -7.098E-1, 3.027E-1, -5.851E-1)
@@ -190,7 +196,7 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             scene.addChild(cam)
         }
 
-        parallelizationScheme = initializeParallelizationScheme(cam)
+        parallelizationScheme = initializeParallelizationScheme()
 
         if (outputProcessingType == OutputProcessingType.DISPLAY) {
             plane = FullscreenObject()
@@ -211,9 +217,19 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             Thread.sleep(50)
         }
 
-        renderer!!.runAfterRendering.add { parallelizationScheme.postRender() }
-        renderer!!.runAfterRendering.add { parallelizationScheme.processCompositedOutput() }
-        renderer!!.runAfterRendering.add { parallelizationScheme.synchronizeCamera() }
+        var frameNumber = 0
+
+        renderer!!.runAfterRendering.add { if(frameNumber > 0) { parallelizationScheme.postRender() } }
+        renderer!!.runAfterRendering.add { if(frameNumber > 0) { parallelizationScheme.processCompositedOutput() } }
+        renderer!!.runAfterRendering.add {
+            parallelizationScheme.synchronizeCamera()
+
+            if(frameNumber > 0 && !Settings().get("LiV-Test-Benchmark", false)) {
+                parallelizationScheme.synchronizeTransferFunction(volumes)
+            }
+
+            frameNumber++
+        }
 
         thread {
             while (renderer?.firstImageReady == false) {
