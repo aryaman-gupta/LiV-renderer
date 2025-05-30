@@ -49,6 +49,20 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     open val firstPassFlag = ""
     open val secondPassFlag = ""
 
+    open val distributedColorsTextureName: String
+        get() = if (explicitCompositingStep) {
+            throw IllegalStateException("The parallelization strategy requires an explicit compositing step, but distributedColorsTextureName is not overridden.")
+        } else {
+            "distributedColors"
+        }
+
+    open val distributedDepthsTextureName: String
+        get() = if (explicitCompositingStep) {
+            throw IllegalStateException("The parallelization strategy requires an explicit compositing step, but distributedDepthsTextureName is not overridden.")
+        } else {
+            "distributedDepths"
+        }
+
     open val compositedColorsTextureName: String
         get() = if (explicitCompositingStep) {
             throw IllegalStateException("The parallelization strategy requires an explicit compositing step, but compositedColorsTextureName is not overridden.")
@@ -116,7 +130,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     init {
         compositorNode = setupCompositor()
         compositorNode?.let {
-            compositorNode!!.visible = true
+            compositorNode!!.visible = false
 
             scene.addChild(compositorNode!!)
         }
