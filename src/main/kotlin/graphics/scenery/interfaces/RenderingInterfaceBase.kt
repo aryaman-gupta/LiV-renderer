@@ -172,11 +172,6 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
     open fun runAsynchronously() {}
 
     override fun init() {
-
-        if (mpiParameters.rank == ParallelizationBase.rootRank && !(Settings().get("LiV-Test-Benchmark", false))) {
-            Settings().set("ServerAddress", "tcp://127.0.0.1")
-            Settings().set("RemoteCamera", true)
-        }
         renderer = hub.add(Renderer.createRenderer(hub, applicationName, scene, windowWidth, windowHeight))
 
         setupVolumeManagerManager()
