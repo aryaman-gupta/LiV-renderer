@@ -7,6 +7,7 @@ import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.VDIMPIWrapper
 import graphics.scenery.textures.Texture
 import graphics.scenery.utils.extensions.applyVulkanCoordinateSystem
+import graphics.scenery.volumes.VolumeManager
 import net.imglib2.type.numeric.integer.IntType
 import net.imglib2.type.numeric.real.FloatType
 import org.joml.Matrix4f
@@ -29,9 +30,13 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     private var prefixBuffer: ByteBuffer? = null
     private var totalSupersegmentsGenerated = 0
 
-    override var windowWidth = volumeManagerManager.getVDIVolumeManager().getVDIWidth()
-    override var windowHeight = volumeManagerManager.getVDIVolumeManager().getVDIHeight()
-    val numSupersegments = volumeManagerManager.getVDIVolumeManager().getMaxSupersegments()
+    override var windowWidth = 0
+        get() = volumeManagerManager.getVDIVolumeManager().getVDIWidth()
+
+    override var windowHeight = 0
+        get() = volumeManagerManager.getVDIVolumeManager().getVDIHeight()
+
+    val numSupersegments get() = volumeManagerManager.getVDIVolumeManager().getMaxSupersegments()
 
     var distributeColorPointer: Long = 0L
     var distributeDepthPointer: Long = 0L
@@ -40,6 +45,9 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
 
     override val compositedColorsTextureName: String = "CompositedVDIColor"
     override val compositedDepthsTextureName: String = "CompositedVDIDepth"
+
+    override val distributedColorsTextureName: String = "VDIsColor"
+    override val distributedDepthsTextureName: String = "VDIsDepth"
 
     val nativeHandle = VDIMPIWrapper.initializeVDIResources(volumeManagerManager.getVDIVolumeManager().maxColorBufferSize,
         volumeManagerManager.getVDIVolumeManager().maxDepthBufferSize,
@@ -199,8 +207,7 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         // Upload data for compositing
         val compositor = compositorNode as VDICompositorNode
 
-//        compositor.nw = volumeManagerManager.getVolumeManager().shaderProperties.get("nw") as Float
-        compositor.nw = 0.1f
+        compositor.nw = volumeManagerManager.hub.get<VolumeManager>()!!.shaderProperties.get("nw") as Float
 
         compositor.ProjectionOriginal = Matrix4f(camera.spatial().projection).applyVulkanCoordinateSystem()
         compositor.invProjectionOriginal = Matrix4f(camera.spatial().projection).applyVulkanCoordinateSystem().invert()
@@ -230,10 +237,44 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             logger.debug("Rank ${mpiParameters.rank}: totalSupersegmentsFrom $i: ${elementCounts[i] / (4 * 4)}")
         }
 
-        compositor.material().textures[compositedColorsTextureName] = Texture(Vector3i(512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 4, contents = vdiSetColour, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
+        // Pad vdiSetColour if it contains less bytes than required for the texture
+        val requiredColorBytes = 512 * 512 * ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt() * 4 * 4
+        var paddedVdiSetColour = vdiSetColour
+        if (vdiSetColour.remaining() < requiredColorBytes) {
+           val paddedBuffer = ByteBuffer.allocateDirect(requiredColorBytes)
+           val oldLimit = vdiSetColour.limit()
+           vdiSetColour.limit(vdiSetColour.position() + vdiSetColour.remaining())
+           paddedBuffer.put(vdiSetColour)
+           paddedBuffer.position(vdiSetColour.remaining())
+           while (paddedBuffer.position() < requiredColorBytes) {
+               paddedBuffer.put(0)
+           }
+           paddedBuffer.flip()
+           paddedVdiSetColour = paddedBuffer
+           vdiSetColour.limit(oldLimit)
+        }
+
+        // Pad vdiSetDepth if it contains less bytes than required for the texture
+        val requiredDepthBytes = 2 * 512 * 512 * ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt() * 4
+        var paddedVdiSetDepth = vdiSetDepth
+        if (vdiSetDepth.remaining() < requiredDepthBytes) {
+            val paddedBuffer = ByteBuffer.allocateDirect(requiredDepthBytes)
+            val oldLimit = vdiSetDepth.limit()
+            vdiSetDepth.limit(vdiSetDepth.position() + vdiSetDepth.remaining())
+            paddedBuffer.put(vdiSetDepth)
+            paddedBuffer.position(vdiSetDepth.remaining())
+            while (paddedBuffer.position() < requiredDepthBytes) {
+                paddedBuffer.put(0)
+            }
+            paddedBuffer.flip()
+            paddedVdiSetDepth = paddedBuffer
+            vdiSetDepth.limit(oldLimit)
+        }
+
+        compositor.material().textures[distributedColorsTextureName] = Texture(Vector3i(512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 4, contents = paddedVdiSetColour, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
             type = FloatType(), mipmap = false, normalized = false, minFilter = Texture.FilteringMode.NearestNeighbour, maxFilter = Texture.FilteringMode.NearestNeighbour)
 
-        compositor.material().textures[compositedDepthsTextureName] = Texture(Vector3i(2 * 512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 1, contents = vdiSetDepth, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
+        compositor.material().textures[distributedDepthsTextureName] = Texture(Vector3i(2 * 512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 1, contents = paddedVdiSetDepth, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
             type = FloatType(), mipmap = false, normalized = false, minFilter = Texture.FilteringMode.NearestNeighbour, maxFilter = Texture.FilteringMode.NearestNeighbour)
 
         compositor.material().textures["VDIsPrefix"] = Texture(Vector3i(windowHeight, windowWidth, 1), 1, contents = prefixSet, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
@@ -243,6 +284,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         val view = camera.spatial().getTransformation()
         compositor.ViewOriginal = view
         compositor.invViewOriginal = Matrix4f(view).invert()
+
+        compositor.visible = true
 
     }
 
