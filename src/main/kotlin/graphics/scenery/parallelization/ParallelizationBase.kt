@@ -431,6 +431,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         camera.spatial().position = Vector3f(newCameraData[0], newCameraData[1], newCameraData[2])
         camera.spatial().rotation = Quaternionf(newCameraData[3], newCameraData[4], newCameraData[5], newCameraData[6])
 
+        logger.info("On rank: ${mpiParameters.rank}, camera pose after synchronization is: ${camera.spatial().position}, ${camera.spatial().rotation}")
+
         previousCameraPosition = camera.spatial().position
         previousCameraRotation = camera.spatial().rotation
     }
@@ -480,8 +482,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
             volume.transferFunction.clear()
 
-            for (i in 0 until tfSizeInt / 8) {
-                volume.transferFunction.addControlPoint(tfData[i * 2], tfData[i * 2 + 1])
+            for (j in 0 until tfSizeInt / 8) {
+                volume.transferFunction.addControlPoint(tfData[j * 2], tfData[j * 2 + 1])
             }
         }
     }
