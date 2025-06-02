@@ -363,6 +363,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
             compositingPass = false
             setCompositorActivityStatus(false)
             gatherCompositedOutput(compositedBuffers)
+            finalOutputReady = true
             firstPass = true
             volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
         }
