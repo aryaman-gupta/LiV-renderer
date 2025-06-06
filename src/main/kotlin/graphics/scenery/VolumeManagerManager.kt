@@ -35,7 +35,8 @@ class VolumeManagerManager (var hub: Hub) {
 
     fun getVolumeManager(): VolumeManager {
         if (::volumeManager.isInitialized) {
-        return volumeManager
+            // Return the current volume manager from the hub.
+            return hub.get<VolumeManager>()!!
         } else {
             throw UninitializedPropertyAccessException("VolumeManager has not been instantiated")
         }
