@@ -15,8 +15,8 @@ class VolumeManagerManager (var hub: Hub) {
 
     val NUM_LAYERS = System.getenv("LIV_NUM_LAYERS")?.toInt() ?: 1
 
-    private lateinit var volumeManager: VolumeManager
     private var vdiVolumeManager: VDIVolumeManager? = null
+    var volumeManagerInitialized = false
     private var firstPassTexture: Texture? = null
     private var colorTexture: Texture? = null
     private var depthTexture: Texture? = null
@@ -34,7 +34,7 @@ class VolumeManagerManager (var hub: Hub) {
     }
 
     fun getVolumeManager(): VolumeManager {
-        if (::volumeManager.isInitialized) {
+        if (volumeManagerInitialized) {
             // Return the current volume manager from the hub.
             return hub.get<VolumeManager>()!!
         } else {
@@ -116,60 +116,67 @@ class VolumeManagerManager (var hub: Hub) {
 
     fun instantiateVolumeManager(outputType: OutputType, windowWidth: Int, windowHeight: Int, scene: Scene) {
 
+        var volumeManager: VolumeManager
         this.outputType = outputType
-        if (outputType == OutputType.REGULAR_IMAGE) {
-            volumeManager = createVolumeManager("ComputeVolume.comp")
-            volumeManager.customTextures.add("OutputRender")
+        when (outputType) {
+            OutputType.REGULAR_IMAGE -> {
+                volumeManager = createVolumeManager("ComputeVolume.comp")
+                volumeManager.customTextures.add("OutputRender")
 
-            val outputBuffer = MemoryUtil.memCalloc(windowWidth*windowHeight*4)
-            val outputTexture = Texture.fromImage(Image(outputBuffer, windowWidth, windowHeight), usage = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture))
-            volumeManager.material().textures["OutputRender"] = outputTexture
+                val outputBuffer = MemoryUtil.memCalloc(windowWidth*windowHeight*4)
+                val outputTexture = Texture.fromImage(Image(outputBuffer, windowWidth, windowHeight), usage = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture))
+                volumeManager.material().textures["OutputRender"] = outputTexture
 
-            colorTexture = volumeManager.material().textures["OutputRender"]
+                colorTexture = volumeManager.material().textures["OutputRender"]
 
-            volumeManager.customUniforms.add("fixedStepSize")
-            volumeManager.shaderProperties["fixedStepSize"] = true
-            volumeManager.customUniforms.add("stepsPerVoxel")
-            volumeManager.shaderProperties["stepsPerVoxel"] = 2
-        } else if (outputType == OutputType.LAYERED_IMAGE) {
-            volumeManager = createVolumeManager("ComputeNonConvex.comp", "AccumulateNonConvex.comp")
-            volumeManager.customTextures.add("LayeredColors")
-            volumeManager.customTextures.add("LayeredDepths")
+                volumeManager.customUniforms.add("fixedStepSize")
+                volumeManager.shaderProperties["fixedStepSize"] = true
+                volumeManager.customUniforms.add("stepsPerVoxel")
+                volumeManager.shaderProperties["stepsPerVoxel"] = 2
+            }
+            OutputType.LAYERED_IMAGE -> {
+                volumeManager = createVolumeManager("ComputeNonConvex.comp", "AccumulateNonConvex.comp")
+                volumeManager.customTextures.add("LayeredColors")
+                volumeManager.customTextures.add("LayeredDepths")
 
-            val layeredColorBuffer = MemoryUtil.memCalloc(windowWidth*windowHeight*4*NUM_LAYERS)
-            var layeredColorTexture: Texture = Texture.fromImage(Image(layeredColorBuffer, NUM_LAYERS, windowWidth, windowHeight),
-                usage = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture))
-            volumeManager.material().textures["LayeredColors"] = layeredColorTexture
+                val layeredColorBuffer = MemoryUtil.memCalloc(windowWidth*windowHeight*4*NUM_LAYERS)
+                var layeredColorTexture: Texture = Texture.fromImage(Image(layeredColorBuffer, NUM_LAYERS, windowWidth, windowHeight),
+                    usage = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture))
+                volumeManager.material().textures["LayeredColors"] = layeredColorTexture
 
-            val layeredDepthBuffer = MemoryUtil.memCalloc(windowWidth*windowHeight*4*NUM_LAYERS)
-            var layeredDepthTexture: Texture = Texture.fromImage(Image(layeredDepthBuffer, NUM_LAYERS, windowWidth, windowHeight, FloatType()),
-                usage = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture), channels = 1, mipmap = false,
-                normalized = false, minFilter = Texture.FilteringMode.NearestNeighbour, maxFilter = Texture.FilteringMode.NearestNeighbour)
+                val layeredDepthBuffer = MemoryUtil.memCalloc(windowWidth*windowHeight*4*NUM_LAYERS)
+                var layeredDepthTexture: Texture = Texture.fromImage(Image(layeredDepthBuffer, NUM_LAYERS, windowWidth, windowHeight, FloatType()),
+                    usage = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture), channels = 1, mipmap = false,
+                    normalized = false, minFilter = Texture.FilteringMode.NearestNeighbour, maxFilter = Texture.FilteringMode.NearestNeighbour)
 
-            volumeManager.material().textures["LayeredDepths"] = layeredDepthTexture
+                volumeManager.material().textures["LayeredDepths"] = layeredDepthTexture
 
-            colorTexture = volumeManager.material().textures["LayeredColors"]
-            depthTexture = volumeManager.material().textures["LayeredDepths"]
+                colorTexture = volumeManager.material().textures["LayeredColors"]
+                depthTexture = volumeManager.material().textures["LayeredDepths"]
 
-            volumeManager.customUniforms.add("fixedStepSize")
-            volumeManager.shaderProperties["fixedStepSize"] = true
-            volumeManager.customUniforms.add("stepsPerVoxel")
-            volumeManager.shaderProperties["stepsPerVoxel"] = 2
-            volumeManager.customUniforms.add("numLayers")
-            volumeManager.shaderProperties["numLayers"] = NUM_LAYERS
-        } else if (outputType == OutputType.VDI) {
-            vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
-            volumeManager = vdiVolumeManager!!.createVDIVolumeManager(vdiFull = false)
-            colorTexture = vdiVolumeManager!!.getColorTextureOrNull()
-            depthTexture = vdiVolumeManager!!.getDepthTextureOrNull()
-            firstPassTexture = vdiVolumeManager!!.getNumGeneratedTextureOrNull()
-        } else if (outputType == OutputType.TEST_VDI_FULL) {
-            vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
-            volumeManager = vdiVolumeManager!!.createVDIVolumeManager(vdiFull = true)
-            colorTexture = vdiVolumeManager!!.getColorTextureOrNull()
-            depthTexture = vdiVolumeManager!!.getDepthTextureOrNull()
+                volumeManager.customUniforms.add("fixedStepSize")
+                volumeManager.shaderProperties["fixedStepSize"] = true
+                volumeManager.customUniforms.add("stepsPerVoxel")
+                volumeManager.shaderProperties["stepsPerVoxel"] = 2
+                volumeManager.customUniforms.add("numLayers")
+                volumeManager.shaderProperties["numLayers"] = NUM_LAYERS
+            }
+            OutputType.VDI -> {
+                vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
+                volumeManager = vdiVolumeManager!!.createVDIVolumeManager(vdiFull = false)
+                colorTexture = vdiVolumeManager!!.getColorTextureOrNull()
+                depthTexture = vdiVolumeManager!!.getDepthTextureOrNull()
+                firstPassTexture = vdiVolumeManager!!.getNumGeneratedTextureOrNull()
+            }
+            OutputType.TEST_VDI_FULL -> {
+                vdiVolumeManager = VDIVolumeManager(hub, windowWidth, windowHeight, NUM_LAYERS, scene)
+                volumeManager = vdiVolumeManager!!.createVDIVolumeManager(vdiFull = true)
+                colorTexture = vdiVolumeManager!!.getColorTextureOrNull()
+                depthTexture = vdiVolumeManager!!.getDepthTextureOrNull()
+            }
         }
         hub.add(volumeManager)
+        volumeManagerInitialized = true
     }
 
 }
