@@ -251,95 +251,8 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
      */
     fun postRender() {
 
-        if(!twoPassRendering) {
-            val buffersToDistribute: MutableList<ByteBuffer> = mutableListOf()
-            val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
-            var textureFetched = colorTexture.fetchFromGPU()
-            if (!textureFetched) {
-                throw RuntimeException("Error fetching color texture.").also { it.printStackTrace() }
-            }
-
-            buffersToDistribute.add(colorTexture.contents!!)
-
-            // can't assume that a depth texture will always be present
-            val depthTexture = volumeManagerManager.getDepthTextureOrNull()
-            if(depthTexture != null) {
-                textureFetched = depthTexture.fetchFromGPU()
-                if (!textureFetched) {
-                    throw RuntimeException("Error fetching depth texture.").also { it.printStackTrace() }
-                }
-
-                buffersToDistribute.add(depthTexture.contents!!)
-            }
-
-            fetchAdditionalTextureData().forEach {
-                buffersToDistribute.add(it)
-            }
-
-            distributeForCompositing(buffersToDistribute)
-
-            if(explicitCompositingStep) {
-                compositingPass = true
-                firstPass = false
-                volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = false
-            }
-
-            //TODO: is this correct for cases where there is an explicit compositing step?
-            finalOutputReady = true
-        } else {
-            if(firstPass) {
-                // Data generated in the first pass is fetched and processed
-                val firstPassData = getFirstPassData()
-                processFirstPassData(firstPassData)
-
-                firstPass = false
-                secondPass = true
-
-                volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = false
-                volumeManagerManager.getVolumeManager().shaderProperties[secondPassFlag] = true
-            } else if(secondPass) {
-                // Final generated (rendered) buffers are fetched and distributed for compositing
-
-                val buffersToDistribute: MutableList<ByteBuffer> = mutableListOf()
-                val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
-                var textureFetched = colorTexture.fetchFromGPU()
-                if (!textureFetched) {
-                    throw RuntimeException("Error fetching color texture.").also { it.printStackTrace() }
-                }
-
-                buffersToDistribute.add(colorTexture.contents!!)
-
-                // safe to assume that a 2-pass approach will always have a depth texture
-                val depthTexture = volumeManagerManager.getDepthTextureOrNull()!!
-                textureFetched = depthTexture.fetchFromGPU()
-                if (!textureFetched) {
-                    throw RuntimeException("Error fetching depth texture.").also { it.printStackTrace() }
-                }
-
-                buffersToDistribute.add(depthTexture.contents!!)
-
-                fetchAdditionalTextureData().forEach {
-                    buffersToDistribute.add(it)
-                }
-
-                distributeForCompositing(buffersToDistribute)
-                // the distribute code will then call the [uploadForCompositing] function which will upload the data necessary for compositing
-
-                if(explicitCompositingStep) {
-                    secondPass = false
-                    compositingPass = true
-                    setCompositorActivityStatus(true)
-                    volumeManagerManager.getVolumeManager().shaderProperties[secondPassFlag] = false
-                } else {
-                    secondPass = false
-                    firstPass = true
-                    finalOutputReady = true
-                    volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
-                }
-            }
-        }
-
         if(explicitCompositingStep && compositingPass) {
+            // This is the compositing pass, where we gather the composited output
             val compositedBuffers: MutableList<ByteBuffer> = mutableListOf()
 
             // The compositing pass just completed
@@ -360,12 +273,142 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
             compositedBuffers.add(compositedDepths.contents!!)
 
+            compositedBuffers.forEachIndexed { index, buffer ->
+                val isAllZero = buffer.duplicate().let {
+                    it.rewind()
+                    while (it.hasRemaining()) {
+                        if (it.get().toInt() != 0) return@let false
+                    }
+                    true
+                }
+                if (isAllZero) {
+                    logger.warn("Composited buffer at index $index is filled with only zeros.")
+                } else {
+                    logger.info("Composited buffer at index $index is not filled with only zeros.")
+                }
+            }
+
             compositingPass = false
             setCompositorActivityStatus(false)
             gatherCompositedOutput(compositedBuffers)
             finalOutputReady = true
             firstPass = true
             volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
+        } else {
+            // This is the rendering pass, where we fetch the rendered buffers and distribute them for compositing
+            if(!twoPassRendering) {
+                val buffersToDistribute: MutableList<ByteBuffer> = mutableListOf()
+                val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
+                var textureFetched = colorTexture.fetchFromGPU()
+                if (!textureFetched) {
+                    throw RuntimeException("Error fetching color texture.").also { it.printStackTrace() }
+                }
+
+                buffersToDistribute.add(colorTexture.contents!!)
+
+                // can't assume that a depth texture will always be present
+                val depthTexture = volumeManagerManager.getDepthTextureOrNull()
+                if(depthTexture != null) {
+                    textureFetched = depthTexture.fetchFromGPU()
+                    if (!textureFetched) {
+                        throw RuntimeException("Error fetching depth texture.").also { it.printStackTrace() }
+                    }
+
+                    buffersToDistribute.add(depthTexture.contents!!)
+                }
+
+                fetchAdditionalTextureData().forEach {
+                    buffersToDistribute.add(it)
+                }
+
+                distributeForCompositing(buffersToDistribute)
+
+                if(explicitCompositingStep) {
+                    compositingPass = true
+                    firstPass = false
+                    volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = false
+                }
+
+                //TODO: is this correct for cases where there is an explicit compositing step?
+                finalOutputReady = true
+            } else {
+                if(firstPass) {
+                    // Data generated in the first pass is fetched and processed
+                    val firstPassData = getFirstPassData()
+
+                    // Check if firstPassData is filled with only zeros
+                    val isAllZero = firstPassData.duplicate().let {
+                        it.rewind()
+                        while (it.hasRemaining()) {
+                            if (it.get().toInt() != 0) return@let false
+                        }
+                        true
+                    }
+                    if (isAllZero) {
+                        logger.warn("First pass data is filled with only zeros.")
+                    }
+
+                    processFirstPassData(firstPassData)
+
+                    firstPass = false
+                    secondPass = true
+
+                    volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = false
+                    volumeManagerManager.getVolumeManager().shaderProperties[secondPassFlag] = true
+                } else if(secondPass) {
+                    // Final generated (rendered) buffers are fetched and distributed for compositing
+
+                    val buffersToDistribute: MutableList<ByteBuffer> = mutableListOf()
+                    val colorTexture = volumeManagerManager.getColorTextureOrNull()!!
+                    var textureFetched = colorTexture.fetchFromGPU()
+                    if (!textureFetched) {
+                        throw RuntimeException("Error fetching color texture.").also { it.printStackTrace() }
+                    }
+
+                    buffersToDistribute.add(colorTexture.contents!!)
+
+                    // safe to assume that a 2-pass approach will always have a depth texture
+                    val depthTexture = volumeManagerManager.getDepthTextureOrNull()!!
+                    textureFetched = depthTexture.fetchFromGPU()
+                    if (!textureFetched) {
+                        throw RuntimeException("Error fetching depth texture.").also { it.printStackTrace() }
+                    }
+
+                    buffersToDistribute.add(depthTexture.contents!!)
+
+                    fetchAdditionalTextureData().forEach {
+                        buffersToDistribute.add(it)
+                    }
+
+                    buffersToDistribute.forEachIndexed { index, buffer ->
+                        val isAllZero = buffer.duplicate().let {
+                            it.rewind()
+                            while (it.hasRemaining()) {
+                                if (it.get().toInt() != 0) return@let false
+                            }
+                            true
+                        }
+                        if (isAllZero) {
+                            logger.warn("Buffer at index $index in buffersToDistribute is filled with only zeros.")
+                        }
+                    }
+
+                    distributeForCompositing(buffersToDistribute)
+                    // the distribute code will then call the [uploadForCompositing] function which will upload the data necessary for compositing
+
+                    if(explicitCompositingStep) {
+                        secondPass = false
+                        compositingPass = true
+                        setCompositorActivityStatus(true)
+                        volumeManagerManager.getVolumeManager().shaderProperties[secondPassFlag] = false
+                    } else {
+                        secondPass = false
+                        firstPass = true
+                        finalOutputReady = true
+                        volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
+                    }
+                }
+            }
         }
 
     }
@@ -430,8 +473,6 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
 
         camera.spatial().position = Vector3f(newCameraData[0], newCameraData[1], newCameraData[2])
         camera.spatial().rotation = Quaternionf(newCameraData[3], newCameraData[4], newCameraData[5], newCameraData[6])
-
-        logger.info("On rank: ${mpiParameters.rank}, camera pose after synchronization is: ${camera.spatial().position}, ${camera.spatial().rotation}")
 
         previousCameraPosition = camera.spatial().position
         previousCameraRotation = camera.spatial().rotation
