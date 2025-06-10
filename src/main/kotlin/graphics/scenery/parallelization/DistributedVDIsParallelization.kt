@@ -228,13 +228,13 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         val vdiSetDepth = buffersToUpload[1]
         val prefixSet = buffersToUpload[2]
 
-        val supersegmentsRecvd = (vdiSetColour.remaining() / (4*4)).toFloat() //including potential 0 supersegments that were padded
+        val supersegmentsRecvd = (vdiSetColour.remaining() / (4*4)).toFloat()
 
         logger.debug("Rank: ${mpiParameters.rank}: total supsegs recvd (including 0s): $supersegmentsRecvd")
 
         for (i in 0 until mpiParameters.commSize) {
             compositor.totalSupersegmentsFrom[i] = elementCounts[i] / (4 * 4)
-            logger.debug("Rank ${mpiParameters.rank}: totalSupersegmentsFrom $i: ${elementCounts[i] / (4 * 4)}")
+            logger.info("Rank ${mpiParameters.rank}: totalSupersegmentsFrom $i: ${elementCounts[i] / (4 * 4)}")
         }
 
         // Pad vdiSetColour if it contains less bytes than required for the texture
