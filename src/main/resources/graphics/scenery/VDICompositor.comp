@@ -27,13 +27,19 @@ float adjustOpacity(float a, float modifiedStepLength) {
     return 1.0 - pow((1.0 - a), modifiedStepLength);
 }
 
-ivec2 debug_pixel = ivec2(80, 360);
+ivec2 debug_pixel = ivec2(640, 360);
 
 int frontSupersegment[50]; // which supersegment of this pixel are we currently looking at, for each process
 int supersegmentsFromPE[50]; //how many supersegments did this list receive from each of the PEs
 int cumulativePrefixIncrements[50];
 int numInputSupersegments;
-ivec3 opImageCoords;
+
+#define GET_OUTPUT_NS imageSize(CompositedVDIColor).z
+#define GET_OUTPUT_WIDTH imageSize(CompositedVDIColor).x
+#define GET_OUTPUT_HEIGHT imageSize(CompositedVDIColor).y
+
+#define INSERT_COLOR(index, color) imageStore(CompositedVDIColor, ivec3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, index), color)
+#define INSERT_DEPTH(index, depths) imageStore(CompositedVDIDepth, ivec3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, index), depths)
 
 int bufferWidth;
 int bufferHeight;
@@ -82,22 +88,22 @@ int determineNextSupseg(int numProcesses, out float startDepth, out float endDep
 
         ivec3 indices;
         if(isCompact) {
-            indices = supersegmentIndices(ivec2(j * opImageCoords.z + gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), frontSupersegment[j], j);
+            indices = supersegmentIndices(ivec2(j * GET_OUTPUT_WIDTH + gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), frontSupersegment[j], j);
             if(gl_GlobalInvocationID.xy == debug_pixel) {
                 debugPrintfEXT("The buffer indices are: %d, %d, %d", indices.xyz);
             }
         } else {
-            indices = ivec3(frontSupersegment[j], gl_GlobalInvocationID.y, j * opImageCoords.z + gl_GlobalInvocationID.x);
+            indices = ivec3(frontSupersegment[j], gl_GlobalInvocationID.y, j * GET_OUTPUT_WIDTH + gl_GlobalInvocationID.x);
         }
 
         float curStartDepth = imageLoad(VDIsDepth, ivec3(indices.x * 2, indices.yz)).x;
 
-        //        #if USE_PRINTF
-        //        if(gl_GlobalInvocationID.xy == debug_pixel) {
-        //            debugPrintfEXT("Loaded start depth: %f from supseg: %d of process: %d", curStartDepth, frontSupersegment[j], j);
-        //            debugPrintfEXT("Indexes used for fetching were: y: %d and z: %d", gl_GlobalInvocationID.y, j * opImageCoords.z + gl_GlobalInvocationID.x);
-        //        }
-        //        #endif
+        #if USE_PRINTF
+        if(gl_GlobalInvocationID.xy == debug_pixel) {
+            debugPrintfEXT("Loaded start depth: %f from supseg: %d of process: %d", curStartDepth, frontSupersegment[j], j);
+            debugPrintfEXT("Indexes used for fetching were: y: %d and z: %d", gl_GlobalInvocationID.y, j * GET_OUTPUT_WIDTH + gl_GlobalInvocationID.x);
+        }
+        #endif
 
         if(curStartDepth < lowDepth && curStartDepth != 0) { //todo: improve empty detection
             lowDepth = curStartDepth;
@@ -161,9 +167,9 @@ void writeSupersegment(int index, float start, float end, vec4 color) {
         debugPrintfEXT("Error! Incorrect supersegment written at index: %d of list: (%d, %d). Start was: %f and end was: %f", index, gl_GlobalInvocationID.xy, start, end);
     }
 
-    imageStore(CompositedVDIDepth, ivec3(2 * index, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(start, 0, 0, 0));
-    imageStore(CompositedVDIDepth, ivec3(2 * index + 1, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(end, 0, 0, 0));
-    imageStore(CompositedVDIColor, ivec3(index, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), color);
+    uvec4 depths = uvec4(start, end, 0, 0);
+    INSERT_DEPTH(index, depths);
+    INSERT_COLOR(index, color);
 
 }
 
@@ -203,12 +209,6 @@ int numSupersegmentsIn(ivec2 theList, int process_id) {
 
 void main() {
 
-    #if USE_PRINTF
-    if(gl_GlobalInvocationID.xy == debug_pixel) {
-        debugPrintfEXT("Hello World! This is the new shader!");
-    }
-    #endif
-
     if(!doComposite) {
         #if USE_PRINTF
         if(gl_GlobalInvocationID.xy == debug_pixel) {
@@ -216,6 +216,12 @@ void main() {
         }
         #endif
         return;
+    } else {
+        #if USE_PRINTF
+        if(gl_GlobalInvocationID.xy == debug_pixel) {
+            debugPrintfEXT("VDICompositor: starting compositing pass!");
+        }
+        #endif
     }
 
     if(gl_GlobalInvocationID.x >= vdiWidth || gl_GlobalInvocationID.y >= vdiHeight) {
@@ -234,9 +240,7 @@ void main() {
     //    if(!doComposite) {
     //        return;
     //    }
-
-    opImageCoords = imageSize(CompositedVDIColor);
-    int numOutputSupersegments = opImageCoords.x;
+    int numOutputSupersegments = GET_OUTPUT_NS;
 
     if(isCompact) {
 
@@ -249,15 +253,15 @@ void main() {
         int cumulativeSupsegs = 0;
 
         for(int i = 0; i < numProcesses; i++) {
-            ivec2 listID = ivec2(i * opImageCoords.z + gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+            ivec2 listID = ivec2(i * GET_OUTPUT_WIDTH + gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
             supersegmentsFromPE[i] = numSupersegmentsIn(listID, i);
             #if USE_PRINTF
             if(gl_GlobalInvocationID.xy == debug_pixel) {
                 debugPrintfEXT("Received %d supersegments from PE %d", supersegmentsFromPE[i], i);
             }
-            if(supersegmentsFromPE[i] < 0 || supersegmentsFromPE[i] > 20) {
-                debugPrintfEXT("Error! invoc id: (%d, %d) has %d supersegs from process: %d", gl_GlobalInvocationID.xy, supersegmentsFromPE[i], i);
-            }
+//            if(supersegmentsFromPE[i] < 0 || supersegmentsFromPE[i] > 20) {
+//                debugPrintfEXT("Error! invoc id: (%d, %d) has %d supersegs from process: %d", gl_GlobalInvocationID.xy, supersegmentsFromPE[i], i);
+//            }
             #endif
             cumulativePrefixIncrements[i] = cumulativeSupsegs;
             cumulativeSupsegs += totalSupersegmentsFrom[i];
@@ -274,7 +278,7 @@ void main() {
 
     #if USE_PRINTF
     if(gl_GlobalInvocationID.xy == debug_pixel) {
-        debugPrintfEXT("Op image coords are: (%d, %d, %d)", opImageCoords.xyz);
+        debugPrintfEXT("Op image coords are: (%d, %d, %d)", GET_OUTPUT_WIDTH, GET_OUTPUT_HEIGHT, GET_OUTPUT_NS);
     }
     #endif
 
@@ -547,9 +551,8 @@ void main() {
     if(supersegmentNum < numOutputSupersegments) {
         for(int i = supersegmentNum; i < numOutputSupersegments; i++) {
             //If this o/p supersegment could not be written to due to insufficient inputs, make it 0
-            imageStore(CompositedVDIDepth, ivec3(2 * i, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(0));
-            imageStore(CompositedVDIDepth, ivec3(2 * i + 1, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(0));
-            imageStore(CompositedVDIColor, ivec3(i, gl_GlobalInvocationID.y, gl_GlobalInvocationID.x), vec4(0));
+            INSERT_DEPTH(i, uvec4(0));
+            INSERT_COLOR(i, vec4(0));
         }
     }
 }
