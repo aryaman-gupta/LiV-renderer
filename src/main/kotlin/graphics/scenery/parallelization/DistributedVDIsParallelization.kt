@@ -30,6 +30,10 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     private var prefixBuffer: ByteBuffer? = null
     private var totalSupersegmentsGenerated = 0
 
+    // Track previously allocated padded buffers for safe deallocation
+    private var prevPaddedColorBuffer: ByteBuffer? = null
+    private var prevPaddedDepthBuffer: ByteBuffer? = null
+
     override var windowWidth = 0
         get() = volumeManagerManager.getVDIVolumeManager().getVDIWidth()
 
@@ -204,6 +208,16 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     }
 
     override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, elementCounts: IntArray) {
+        // Free previously allocated padded buffers, if any
+        prevPaddedColorBuffer?.let {
+            MemoryUtil.memFree(it)
+            prevPaddedColorBuffer = null
+        }
+        prevPaddedDepthBuffer?.let {
+            MemoryUtil.memFree(it)
+            prevPaddedDepthBuffer = null
+        }
+
         // Upload data for compositing
         val compositor = compositorNode as VDICompositorNode
 
@@ -253,6 +267,9 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             paddedBuffer.flip()
             paddedVdiSetColour = paddedBuffer
             vdiSetColour.limit(oldLimit)
+            prevPaddedColorBuffer = paddedBuffer // Save for next deallocation
+        } else {
+            prevPaddedColorBuffer = null
         }
 
         // Pad vdiSetDepth if it contains less bytes than required for the texture
@@ -271,6 +288,9 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             paddedBuffer.flip()
             paddedVdiSetDepth = paddedBuffer
             vdiSetDepth.limit(oldLimit)
+            prevPaddedDepthBuffer = paddedBuffer // Save for next deallocation
+        } else {
+            prevPaddedDepthBuffer = null
         }
 
         compositor.material().textures[distributedColorsTextureName] = Texture(Vector3i(512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 4, contents = paddedVdiSetColour, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
