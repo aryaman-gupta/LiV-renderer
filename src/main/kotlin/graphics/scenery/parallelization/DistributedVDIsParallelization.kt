@@ -230,7 +230,7 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
 
         val supersegmentsRecvd = (vdiSetColour.remaining() / (4*4)).toFloat()
 
-        logger.debug("Rank: ${mpiParameters.rank}: total supsegs recvd (including 0s): $supersegmentsRecvd")
+        logger.debug("Rank: ${mpiParameters.rank}: total supsegs recvd: $supersegmentsRecvd")
 
         for (i in 0 until mpiParameters.commSize) {
             compositor.totalSupersegmentsFrom[i] = elementCounts[i] / (4 * 4)
@@ -241,17 +241,18 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         val requiredColorBytes = 512 * 512 * ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt() * 4 * 4
         var paddedVdiSetColour = vdiSetColour
         if (vdiSetColour.remaining() < requiredColorBytes) {
-           val paddedBuffer = ByteBuffer.allocateDirect(requiredColorBytes)
-           val oldLimit = vdiSetColour.limit()
-           vdiSetColour.limit(vdiSetColour.position() + vdiSetColour.remaining())
-           paddedBuffer.put(vdiSetColour)
-           paddedBuffer.position(vdiSetColour.remaining())
-           while (paddedBuffer.position() < requiredColorBytes) {
-               paddedBuffer.put(0)
-           }
-           paddedBuffer.flip()
-           paddedVdiSetColour = paddedBuffer
-           vdiSetColour.limit(oldLimit)
+            val paddedBuffer = ByteBuffer.allocateDirect(requiredColorBytes)
+            val oldLimit = vdiSetColour.limit()
+            vdiSetColour.limit(vdiSetColour.position() + vdiSetColour.remaining())
+            paddedBuffer.put(vdiSetColour)
+            vdiSetColour.rewind()
+            paddedBuffer.position(vdiSetColour.remaining())
+            while (paddedBuffer.position() < requiredColorBytes) {
+                paddedBuffer.put(0)
+            }
+            paddedBuffer.flip()
+            paddedVdiSetColour = paddedBuffer
+            vdiSetColour.limit(oldLimit)
         }
 
         // Pad vdiSetDepth if it contains less bytes than required for the texture
@@ -262,6 +263,7 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             val oldLimit = vdiSetDepth.limit()
             vdiSetDepth.limit(vdiSetDepth.position() + vdiSetDepth.remaining())
             paddedBuffer.put(vdiSetDepth)
+            vdiSetDepth.rewind()
             paddedBuffer.position(vdiSetDepth.remaining())
             while (paddedBuffer.position() < requiredDepthBytes) {
                 paddedBuffer.put(0)
