@@ -57,8 +57,8 @@ class VDICompositorNode(windowWidth: Int, windowHeight: Int, numSupersegments: I
         val outputDepths = MemoryUtil.memCalloc(VDINode.getDepthBufferSize(windowWidth, windowHeight, numSupersegments) / mpiCommSize)
         val compositedVDIColor = VDINode.generateColorTexture(windowWidth, windowHeight, numSupersegments, outputColours)
         val compositedVDIDepth = VDINode.generateDepthTexture(windowWidth, windowHeight, numSupersegments, outputDepths)
-        material().textures["CompositedVDIColor"] = compositedVDIColor
-        material().textures["CompositedVDIDepth"] = compositedVDIDepth
+        material().textures[compositedColorName] = compositedVDIColor
+        material().textures[compositedDepthName] = compositedVDIDepth
 
         metadata["ComputeMetadata"] = ComputeMetadata(
             workSizes = Vector3i(windowWidth/mpiCommSize, windowHeight, 1)
@@ -69,6 +69,11 @@ class VDICompositorNode(windowWidth: Int, windowHeight: Int, numSupersegments: I
         numProcesses = mpiCommSize
 
         isCompact = true
+    }
+
+    companion object {
+        val compositedColorName = "CompositedVDIColor"
+        val compositedDepthName = "CompositedVDIDepth"
     }
 
 }

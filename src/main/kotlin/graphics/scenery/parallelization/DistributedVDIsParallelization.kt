@@ -47,8 +47,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     var distributePrefixPointer: Long = 0L
     var mpiPointer: Long = 0L
 
-    override val compositedColorsTextureName: String = "CompositedVDIColor"
-    override val compositedDepthsTextureName: String = "CompositedVDIDepth"
+    override val compositedColorsTextureName: String = VDICompositorNode.compositedColorName
+    override val compositedDepthsTextureName: String = VDICompositorNode.compositedDepthName
 
     override val distributedColorsTextureName: String = "VDIsColor"
     override val distributedDepthsTextureName: String = "VDIsDepth"
