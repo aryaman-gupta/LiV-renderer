@@ -13,7 +13,7 @@ import org.lwjgl.system.MemoryUtil
 
 class VolumeManagerManager (var hub: Hub) {
 
-    val NUM_LAYERS = System.getenv("LIV_NUM_LAYERS")?.toInt() ?: 1
+    val NUM_LAYERS = System.getenv("LIV_NUM_LAYERS")?.toInt() ?: 20
 
     private var vdiVolumeManager: VDIVolumeManager? = null
     var volumeManagerInitialized = false
