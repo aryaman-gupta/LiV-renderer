@@ -21,7 +21,7 @@ layout (set = 0, binding = 0, rgba32f) uniform readonly image3D VDIsColor;
 layout (set = 1, binding = 0, r32f) uniform readonly image3D VDIsDepth;
 layout (set = 2, binding = 0, r32i) uniform iimage2D VDIsPrefix;
 layout (set = 3, binding = 0, rgba32f) uniform image3D CompositedVDIColor; //TODO: put loadstore
-layout (set = 4, binding = 0, r32f) uniform image3D CompositedVDIDepth; //TODO: put loadstore
+layout (set = 4, binding = 0, rg32f) uniform image3D CompositedVDIDepth; //TODO: put loadstore
 
 float adjustOpacity(float a, float modifiedStepLength) {
     return 1.0 - pow((1.0 - a), modifiedStepLength);
