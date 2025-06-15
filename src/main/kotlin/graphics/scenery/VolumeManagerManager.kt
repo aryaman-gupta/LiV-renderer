@@ -5,6 +5,7 @@ import bvv.core.shadergen.generate.SegmentType
 import graphics.scenery.textures.Texture
 import graphics.scenery.utils.Image
 import graphics.scenery.volumes.VolumeManager
+import graphics.scenery.volumes.vdi.VDINode
 import graphics.scenery.volumes.vdi.VDIVolumeManager
 import net.imglib2.type.numeric.integer.UnsignedByteType
 import net.imglib2.type.numeric.integer.UnsignedShortType
@@ -77,7 +78,7 @@ class VolumeManagerManager (var hub: Hub) {
         return if(outputType == OutputType.LAYERED_IMAGE) {
             FloatType()
         } else if(outputType == OutputType.VDI) {
-            UnsignedShortType()
+            VDINode.getDepthTextureType()
         } else {
             throw IllegalArgumentException("Depth texture type not supported for output type $outputType")
         }
