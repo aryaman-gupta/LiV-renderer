@@ -1,6 +1,6 @@
 #version 450
 #extension GL_EXT_debug_printf : enable
-#define USE_PRINTF 1
+#define USE_PRINTF 0
 
 layout(set = 5, binding = 0) uniform ShaderProperties {
     mat4 ProjectionOriginal;
@@ -47,9 +47,12 @@ int bufferDepth;
 
 ivec3 supersegmentIndices(ivec2 theList, int index, int processID) {
     int linearized = imageLoad(VDIsPrefix, theList.yx).x + index + cumulativePrefixIncrements[processID] - imageLoad(VDIsPrefix, ivec2(0, (((vdiWidth / numProcesses) * (processID))))).x;
+
+    #if USE_PRINTF
     if(gl_GlobalInvocationID.xy == debug_pixel) {
         debugPrintfEXT("Linearized loc: %d", linearized);
     }
+    #endif
 
     int z_ = linearized / (bufferWidth * bufferHeight);
 
@@ -79,9 +82,11 @@ int determineNextSupseg(int numProcesses, out float startDepth, out float endDep
             numInputs = numInputSupersegments;
         }
 
+        #if USE_PRINTF
         if(gl_GlobalInvocationID.xy == debug_pixel) {
             debugPrintfEXT("front supseg: %d", frontSupersegment[j]);
         }
+        #endif
         if(frontSupersegment[j] >= numInputs) {
             continue;
         }
@@ -89,9 +94,11 @@ int determineNextSupseg(int numProcesses, out float startDepth, out float endDep
         ivec3 indices;
         if(isCompact) {
             indices = supersegmentIndices(ivec2(j * GET_OUTPUT_WIDTH + gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), frontSupersegment[j], j);
+            #if USE_PRINTF
             if(gl_GlobalInvocationID.xy == debug_pixel) {
                 debugPrintfEXT("The buffer indices are: %d, %d, %d", indices.xyz);
             }
+            #endif
         } else {
             indices = ivec3(frontSupersegment[j], gl_GlobalInvocationID.y, j * GET_OUTPUT_WIDTH + gl_GlobalInvocationID.x);
         }
@@ -153,9 +160,11 @@ void writeSupersegment(int index, float start, float end, vec4 color) {
     test.rgb = test.rgb + (1.0f - test.a) * newColor * adj_alpha;
     test.a = test.a + (1.0f - test.a) * adj_alpha;
 
+    #if USE_PRINTF
     if(gl_GlobalInvocationID.xy == debug_pixel) {
         debugPrintfEXT("accumulated color so far: (%f, %f, %f, %f)", test.rgba);
     }
+    #endif
 
     #if USE_PRINTF
     if(gl_GlobalInvocationID.xy == debug_pixel) {
@@ -194,10 +203,12 @@ int numSupersegmentsIn(ivec2 theList, int process_id) {
         int prefixNext = imageLoad(VDIsPrefix, ivec2(nextList)).x;
         int prefixThis = imageLoad(VDIsPrefix, ivec2(theList.yx)).x;
 
+        #if USE_PRINTF
         if(gl_GlobalInvocationID.xy == debug_pixel) {
             debugPrintfEXT("theList: (%d, %d), nextList: (%d, %d)", theList.xy, nextList.xy);
             debugPrintfEXT("prefix next: %d, this: %d", prefixNext, prefixThis);
         }
+        #endif
 
         if(prefixNext == 0 && prefixThis != 0) {
             return totalSupersegmentsFrom[process_id] - prefixThis;
@@ -551,6 +562,12 @@ void main() {
     if(supersegmentNum < numOutputSupersegments) {
         for(int i = supersegmentNum; i < numOutputSupersegments; i++) {
             //If this o/p supersegment could not be written to due to insufficient inputs, make it 0
+            #if USE_PRINTF
+            if(gl_GlobalInvocationID.xy == debug_pixel) {
+                debugPrintfEXT("Writing empty supersegment at index: %d", i);
+            }
+            #endif
+
             INSERT_DEPTH(i, uvec4(0));
             INSERT_COLOR(i, vec4(0));
         }
