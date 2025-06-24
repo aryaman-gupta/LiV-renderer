@@ -176,7 +176,7 @@ void writeSupersegment(int index, float start, float end, vec4 color) {
         debugPrintfEXT("Error! Incorrect supersegment written at index: %d of list: (%d, %d). Start was: %f and end was: %f", index, gl_GlobalInvocationID.xy, start, end);
     }
 
-    uvec4 depths = uvec4(start, end, 0, 0);
+    vec4 depths = vec4(start, end, 0, 0);
     INSERT_DEPTH(index, depths);
     INSERT_COLOR(index, color);
 
@@ -219,11 +219,6 @@ int numSupersegmentsIn(ivec2 theList, int process_id) {
 }
 
 void main() {
-
-    for(int i = 0; i < 20; i++) {
-        imageStore(CompositedVDIDepth, ivec3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, i), vec4(1));
-        imageStore(CompositedVDIColor, ivec3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, i), vec4(1));
-    }
 
     if(!doComposite) {
         #if USE_PRINTF
@@ -573,7 +568,7 @@ void main() {
             }
             #endif
 
-            INSERT_DEPTH(i, uvec4(0));
+            INSERT_DEPTH(i, vec4(0));
             INSERT_COLOR(i, vec4(0));
         }
     }
