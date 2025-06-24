@@ -94,7 +94,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
     private var displayGeneratedData = false
     var displayObject: Mesh? = null
 
-    private var frameNumber = 0
+    protected var frameNumber = 0
 
     private var previousCameraPosition = Vector3f(0f, 0f, 0f)
     private var previousCameraRotation = Quaternionf()
