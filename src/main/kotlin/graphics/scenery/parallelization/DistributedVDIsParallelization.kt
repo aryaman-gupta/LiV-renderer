@@ -8,16 +8,23 @@ import graphics.scenery.natives.VDIMPIWrapper
 import graphics.scenery.textures.Texture
 import graphics.scenery.utils.extensions.applyVulkanCoordinateSystem
 import graphics.scenery.volumes.VolumeManager
+import graphics.scenery.volumes.vdi.VDIBufferSizes
+import graphics.scenery.volumes.vdi.VDIData
+import graphics.scenery.volumes.vdi.VDIDataIO
+import graphics.scenery.volumes.vdi.VDIMetadata
 import net.imglib2.type.numeric.integer.IntType
 import net.imglib2.type.numeric.real.FloatType
 import org.joml.Matrix4f
+import org.joml.Vector2i
+import org.joml.Vector3f
 import org.joml.Vector3i
 import org.lwjgl.system.MemoryUtil
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 import kotlin.math.ceil
 
-class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, scene: Scene)
+class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, scene: Scene, val volumeDimensions: IntArray, val modelMatrix: Matrix4f)
     : ParallelizationBase(volumeManagerManager, mpiParameters, scene) {
 
     override val twoPassRendering = true
@@ -328,6 +335,31 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         val gatheredDepths = VDIMPIWrapper.gatherDepthVDI(nativeHandle, depthBuffer, depthBuffer.remaining(), rootRank, depthBuffer.remaining() * mpiParameters.commSize)
 
         if (isRootProcess()) {
+
+            val camera = scene.findObserver()!!
+
+            //first, create and add the VDIMetadata to the final buffers
+            val vdiData = VDIData(
+                VDIBufferSizes(),
+                VDIMetadata(
+                    //TODO: making sure camera properties are consistent throughout VDI generation process
+                    index = frameNumber,
+                    projection = camera.spatial().projection,
+                    view = camera.spatial().getTransformation(),
+                    model = modelMatrix,
+                    volumeDimensions = Vector3f(volumeDimensions[0].toFloat(), volumeDimensions[1].toFloat(), volumeDimensions[2].toFloat()),
+                    windowDimensions = Vector2i(windowWidth, windowHeight),
+                    nw = volumeManagerManager.hub.get<VolumeManager>()!!.shaderProperties.get("nw") as Float
+                )
+            )
+
+            val baos = ByteArrayOutputStream()
+            VDIDataIO.write(vdiData, baos)
+            val vdiMetadataBuffer = ByteBuffer.wrap(baos.toByteArray())
+
+            // add the metadata buffer to the final buffers
+            finalBuffers.add(vdiMetadataBuffer)
+
             // put the composited colors into the final composited buffer list
             gatheredColors?.let {
                 finalBuffers.add(it)
