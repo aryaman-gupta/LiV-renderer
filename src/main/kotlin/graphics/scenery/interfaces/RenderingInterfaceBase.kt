@@ -31,7 +31,8 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
     var volumesCreated = AtomicBoolean(false)
     var sceneSetupComplete = AtomicBoolean(false)
 
-    private var volumeDimensions: IntArray = intArrayOf(0, 0, 0)
+    protected var volumeDimensions: IntArray = intArrayOf(0, 0, 0)
+    private set
 
     protected var pixelToWorld = 0.001f
 
@@ -90,9 +91,9 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             exitProcess(1)
         }
         volumeDimensions = dims
-        volumeDimensionsInitialized.set(true)
 
         pixelToWorld = 3.84f / volumeDimensions[0] // empirically found to work reasonably
+        volumeDimensionsInitialized.set(true)
     }
 
     fun getVolumeScaling(): Float {
@@ -189,6 +190,10 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
                 cam.farPlaneDistance = 20.0f
             }
             scene.addChild(cam)
+        }
+
+        while (!volumeDimensionsInitialized.get()) {
+            Thread.sleep(50)
         }
 
         parallelizationScheme = initializeParallelizationScheme()
