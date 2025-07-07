@@ -74,10 +74,10 @@ Java_graphics_scenery_natives_VDIMPIWrapper_initializeVDIResources(
     resources->prefixCap = prefixCapacity;
 
     // Allocate gather buffers (same size as color/depth for now)
-    resources->colorGatherPtr  = new char[colorCapacity];
+    resources->colorGatherPtr  = new char[gatherColorCapacity];
     resources->colorGatherCap  = gatherColorCapacity;
 
-    resources->depthGatherPtr  = new char[depthCapacity];
+    resources->depthGatherPtr  = new char[gatherDepthCapacity];
     resources->depthGatherCap  = gatherDepthCapacity;
 
 #if VERBOSE
