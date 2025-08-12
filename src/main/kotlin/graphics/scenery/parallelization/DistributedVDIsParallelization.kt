@@ -181,6 +181,9 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         }
 
         // Now perform the MPI_Alltoallv operations for color and depth
+
+        logger.debug("Rank: $rank distributing ${colorCounts.sum()} bytes of color data and ${depthCounts.sum()} bytes of depth data")
+
         val distributedColors = VDIMPIWrapper.distributeColorVDI(
             nativeHandle,
             colorBuffer,
@@ -191,6 +194,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             commSize
         )
 
+        logger.debug("Rank: $rank received ${distributedColors.remaining() / (4 * 4)} supersegments of color data")
+
         val distributedDepths = VDIMPIWrapper.distributeDepthVDI(
             nativeHandle,
             depthBuffer,
@@ -200,6 +205,8 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             depthDisplacementsRecv,
             commSize
         )
+
+        logger.debug("Rank: $rank received ${distributedDepths.remaining() / (4 * 2)} supersegments of depth data")
 
         // Distribute prefix buffer
         val prefixSet = VDIMPIWrapper.distributePrefixVDI(nativeHandle, prefixBuffer!!, mpiParameters.commSize)
