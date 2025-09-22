@@ -12,7 +12,10 @@ import graphics.scenery.volumes.vdi.VDIBufferSizes
 import graphics.scenery.volumes.vdi.VDIData
 import graphics.scenery.volumes.vdi.VDIDataIO
 import graphics.scenery.volumes.vdi.VDIMetadata
+import graphics.scenery.volumes.vdi.VDINode
 import net.imglib2.type.numeric.integer.IntType
+import net.imglib2.type.numeric.integer.UnsignedByteType
+import net.imglib2.type.numeric.integer.UnsignedShortType
 import net.imglib2.type.numeric.real.FloatType
 import org.joml.Matrix4f
 import org.joml.Vector2i
@@ -374,6 +377,78 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             gatheredDepths?.let {
                 finalBuffers.add(it)
             }
+        }
+    }
+
+    private fun correctLinearization(buffer: ByteBuffer, vdiWidth: Int, vdiHeight: Int, numSupersegments: Int, supersegmentResolution: Int) {
+        //the buffers from the individual PEs were incorrectly placed along the z-dimension. We need to instead place
+        //them along the x-dimension
+
+        val separatedBuffers = Array(mpiParameters.commSize) { ByteBuffer.allocateDirect(buffer.remaining() / mpiParameters.commSize) }
+
+        for(i in 0 until mpiParameters.commSize) {
+            val slice = ByteBuffer.allocateDirect(buffer.remaining() / mpiParameters.commSize)
+            val oldLimit = buffer.limit()
+            buffer.limit(buffer.position() + buffer.remaining() / mpiParameters.commSize)
+            slice.put(buffer)
+            buffer.rewind()
+            slice.flip()
+            separatedBuffers[i] = slice
+            buffer.limit(oldLimit)
+        }
+
+        val vdiSize = vdiWidth * vdiHeight * numSupersegments * supersegmentResolution
+
+        if(vdiSize != buffer.remaining()) {
+            logger.error("Buffer size mismatch. Expected $vdiSize, got ${buffer.remaining()}")
+            return
+        }
+
+        for(i in 0 until buffer.remaining() step supersegmentResolution) {
+            //put the element from the correct slice into the buffer
+            val x_ = i % (vdiWidth * supersegmentResolution)
+            val sliceID = x_ / ceil(((vdiWidth.toFloat()) * supersegmentResolution) / mpiParameters.commSize).toInt()
+
+            //get a chunk of size [supersegmentResolution] from the correct slice into the buffer
+            val chunk = ByteArray(supersegmentResolution)
+            separatedBuffers[sliceID].get(chunk)
+            buffer.put(chunk)
+        }
+    }
+
+    override fun modifyFinalBuffers() {
+        // the final buffers are currently not correct. We need to make sure that the way the buffers from the different
+        // PEs are attached matches the linearization order required in the final output
+
+        //the first buffer is the color
+        if(finalBuffers[0].remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize) {
+            logger.error("Final color buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize}, got ${finalBuffers[0].remaining()}")
+        } else {
+            val bytesPerChannel = when(VDINode.getColorTextureType()) {
+                FloatType::class -> 4
+                UnsignedByteType::class -> 1
+                else -> {
+                    logger.error("Unsupported color texture type: ${VDINode.getColorTextureType()}. Assuming 4 bytes per channel.")
+                    4
+                }
+            }
+            correctLinearization(finalBuffers[0], windowWidth, windowHeight, numSupersegments,
+                VDINode.getColorTextureChannels() * bytesPerChannel)
+        }
+
+        if(finalBuffers[1].remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize) {
+            logger.error("Final depth buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize}, got ${finalBuffers[1].remaining()}")
+        } else {
+            val bytesPerChannel = when(VDINode.getDepthTextureType()) {
+                FloatType::class -> 4
+                UnsignedShortType::class -> 2
+                else -> {
+                    logger.error("Unsupported depth texture type: ${VDINode.getDepthTextureType()}. Assuming 4 bytes per channel.")
+                    4
+                }
+            }
+            correctLinearization(finalBuffers[1], windowWidth, windowHeight, numSupersegments,
+                VDINode.getDepthTextureChannels() * bytesPerChannel)
         }
     }
 
