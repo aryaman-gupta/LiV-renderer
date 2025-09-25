@@ -218,6 +218,10 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         // Override to gather composited output if needed
     }
 
+    open fun modifyFinalBuffers() {
+        // Override to modify final buffers [final Buffers] if needed
+    }
+
     /**
      * Uploads the data necessary for compositing. This function should be overridden to upload data and update necessary
      * camera parameters for compositing.
@@ -288,9 +292,18 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
                 }
             }
 
+            // Write composited buffers to disk for debugging
+            compositedBuffers.forEachIndexed { index, buffer ->
+                SystemHelpers.dumpToFile(buffer, "compositedPartial_output_${mpiParameters.rank}_${frameNumber}_$index.raw")
+            }
+
             compositingPass = false
             setCompositorActivityStatus(false)
             gatherCompositedOutput(compositedBuffers)
+            logger.debug("Composited output gathered successfully.")
+
+            modifyFinalBuffers()
+
             finalOutputReady = true
             firstPass = true
             volumeManagerManager.getVolumeManager().shaderProperties[firstPassFlag] = true
@@ -391,6 +404,11 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
                         if (isAllZero) {
                             logger.warn("Buffer at index $index in buffersToDistribute is filled with only zeros.")
                         }
+                    }
+
+                    // Write buffers to disk for debugging
+                    buffersToDistribute.forEachIndexed { index, buffer ->
+                        SystemHelpers.dumpToFile(buffer, "buffersToDistribute_pass${frameNumber}_$index.raw")
                     }
 
                     distributeForCompositing(buffersToDistribute)
