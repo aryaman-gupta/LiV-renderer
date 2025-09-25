@@ -426,8 +426,9 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
                 return
             }
 
-            //the first buffer is the color
-            if(finalBuffers[0].remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize) {
+            //the first buffer is the metadata, followed by the color and depth buffers
+            //we need to switch the linearization of the color and depth buffers
+            if(finalBuffers[1].remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize) {
                 logger.error("Final color buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize}, got ${finalBuffers[0].remaining()}")
             } else {
                 val bytesPerChannel = when(VDINode.getColorTextureType()) {
@@ -442,7 +443,7 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
                     VDINode.getColorTextureChannels() * bytesPerChannel)
             }
 
-            if(finalBuffers[1].remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize) {
+            if(finalBuffers[2].remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize) {
                 logger.error("Final depth buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize}, got ${finalBuffers[1].remaining()}")
             } else {
                 val bytesPerChannel = when(VDINode.getDepthTextureType()) {
