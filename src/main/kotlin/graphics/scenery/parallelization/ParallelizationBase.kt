@@ -218,7 +218,7 @@ abstract class ParallelizationBase(var volumeManagerManager: VolumeManagerManage
         // Override to gather composited output if needed
     }
 
-    open fun modifyFinalBuffers() {
+    open fun modifyFinalBuffers(buffers: List<ByteBuffer> = finalBuffers) {
         // Override to modify final buffers [final Buffers] if needed
     }
 
