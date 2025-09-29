@@ -13,6 +13,7 @@ import graphics.scenery.volumes.vdi.VDIData
 import graphics.scenery.volumes.vdi.VDIDataIO
 import graphics.scenery.volumes.vdi.VDIMetadata
 import graphics.scenery.volumes.vdi.VDINode
+import graphics.scenery.volumes.vdi.modifyFinalBuffersImpl
 import net.imglib2.type.numeric.integer.IntType
 import net.imglib2.type.numeric.integer.UnsignedByteType
 import net.imglib2.type.numeric.integer.UnsignedShortType
@@ -420,50 +421,14 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
     }
 
     override fun modifyFinalBuffers(buffers: List<ByteBuffer>) {
-        // the final buffers are currently not correct. We need to make sure that the way the buffers from the different
-        // PEs are attached matches the linearization order required in the final output
-
-        if(isRootProcess()) {
-            if(finalBuffers.size < 2) {
-                logger.warn("Skipping switching of linearization of final buffers since only ${finalBuffers.size} buffers are present")
-                return
-            }
-
-            //the first buffer is the metadata, followed by the color and depth buffers
-            //we need to switch the linearization of the color and depth buffers
-
-            val colorBuffer = finalBuffers[1]
-            val depthBuffer = finalBuffers[2]
-
-            if(colorBuffer.remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize) {
-                logger.error("Final color buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize}, got ${colorBuffer.remaining()}")
-            } else {
-                val bytesPerChannel = when(VDINode.getColorTextureType()) {
-                    FloatType() -> 4
-                    UnsignedByteType() -> 1
-                    else -> {
-                        logger.error("Unsupported color texture type: ${VDINode.getColorTextureType()}. Assuming 4 bytes per channel.")
-                        4
-                    }
-                }
-                correctLinearization(colorBuffer, windowWidth, windowHeight, numSupersegments,
-                    VDINode.getColorTextureChannels() * bytesPerChannel)
-            }
-
-            if(depthBuffer.remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize) {
-                logger.error("Final depth buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize}, got ${depthBuffer.remaining()}")
-            } else {
-                val bytesPerChannel = when(VDINode.getDepthTextureType()) {
-                    FloatType() -> 4
-                    UnsignedShortType() -> 2
-                    else -> {
-                        logger.error("Unsupported depth texture type: ${VDINode.getDepthTextureType()}. Assuming 4 bytes per channel.")
-                        4
-                    }
-                }
-                correctLinearization(depthBuffer, windowWidth, windowHeight, numSupersegments,
-                    VDINode.getDepthTextureChannels() * bytesPerChannel)
-            }
+        if (isRootProcess()) {
+            modifyFinalBuffersImpl(
+                buffers,
+                mpiParameters,
+                windowWidth,
+                windowHeight,
+                numSupersegments
+            )
         }
     }
 
