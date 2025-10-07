@@ -28,7 +28,7 @@ class VDIGenerationInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int
     }
 
     override fun initializeParallelizationScheme(): ParallelizationBase {
-        return DistributedVDIsParallelization(volumeManagerManager, mpiParameters, scene, volumeDimensions, generateModelMatrix())
+        return DistributedVDIsParallelization(volumeManagerManager, mpiParameters, scene, volumeDimensions, volumes[0]!!.spatial().world)
     }
 
     override fun setupVolumeManagerManager() {
