@@ -1,6 +1,7 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
+import graphics.scenery.Scene
 import graphics.scenery.Settings
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.IceTWrapper
@@ -8,9 +9,8 @@ import graphics.scenery.utils.VideoEncoder
 import graphics.scenery.utils.SystemHelpers
 import java.nio.ByteBuffer
 
-class LayeredImagesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera)
-    : ParallelizationBase ("layered", volumeManagerManager, mpiParameters, camera)
-{
+class LayeredImagesParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, scene: Scene)
+    : ParallelizationBase ("layered", volumeManagerManager, mpiParameters, scene) {
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false
@@ -53,13 +53,13 @@ class LayeredImagesParallelization(volumeManagerManager: VolumeManagerManager, m
         if (isRootProcess()) {
             // put the composited colors into the final composited buffer list
             compositedColors?.let {
-                finalCompositedBuffers.add(compositedColors)
+                finalBuffers.add(compositedColors)
             }
         }
     }
 
     override fun streamOutput() {
-        encoder.encodeFrame(finalCompositedBuffers[0])
+        encoder.encodeFrame(finalBuffers[0])
         videoStreamRunning = true
     }
 }

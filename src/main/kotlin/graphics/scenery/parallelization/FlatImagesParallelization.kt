@@ -1,6 +1,7 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
+import graphics.scenery.Scene
 import graphics.scenery.Settings
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.natives.IceTWrapper
@@ -10,11 +11,10 @@ import org.joml.Vector3f
 import java.nio.ByteBuffer
 
 class FlatImagesParallelization(
-    interfaceName: String,
     volumeManagerManager: VolumeManagerManager,
     mpiParameters: MPIParameters,
-    camera: Camera
-) : ParallelizationBase (interfaceName, volumeManagerManager, mpiParameters, camera) {
+    scene: Scene
+) : ParallelizationBase ("flat", volumeManagerManager, mpiParameters, scene) {
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false
@@ -50,6 +50,12 @@ class FlatImagesParallelization(
             SystemHelpers.dumpToFile(buffers[0], "$outDir/$frameNumber-${mpiParameters.rank}.color")
         }
 
+        if(scene.findObserver() == null) {
+            throw IllegalStateException("No camera found in scene.")
+        }
+
+        val camera = scene.findObserver() as Camera
+
         val cameraPosition = FloatArray(3)
         cameraPosition[0] = camera.spatial().position.x
         cameraPosition[1] = camera.spatial().position.y
@@ -60,13 +66,13 @@ class FlatImagesParallelization(
         if (isRootProcess()) {
             // put the composited colors into the final composited buffer list
             compositedColors?.let {
-                finalCompositedBuffers.add(compositedColors)
+                finalBuffers.add(compositedColors)
             }
         }
     }
 
     override fun streamOutput() {
-        encoder.encodeFrame(finalCompositedBuffers[0])
+        encoder.encodeFrame(finalBuffers[0])
         videoStreamRunning = true
     }
 }

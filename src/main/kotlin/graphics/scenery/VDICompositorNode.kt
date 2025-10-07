@@ -9,6 +9,7 @@ import net.imglib2.type.numeric.real.FloatType
 import org.joml.Matrix4f
 import org.joml.Vector3i
 import org.lwjgl.system.MemoryUtil
+import kotlin.math.ceil
 
 class VDICompositorNode(windowWidth: Int, windowHeight: Int, numSupersegments: Int, mpiCommSize: Int) : RichNode() {
 
@@ -52,13 +53,16 @@ class VDICompositorNode(windowWidth: Int, windowHeight: Int, numSupersegments: I
         name = "VDICompositorNode"
         setMaterial(ShaderMaterial(Shaders.ShadersFromFiles(arrayOf("VDICompositor.comp"), this@VDICompositorNode::class.java)))
 
+        // parallel compositing divides the window width by the number of processes
+        val effectiveWidth = ceil(windowWidth.toFloat() / mpiCommSize).toInt()
+
         // set up the output textures
-        val outputColours = MemoryUtil.memCalloc(VDINode.getColorBufferSize(windowWidth, windowHeight, numSupersegments) / mpiCommSize)
-        val outputDepths = MemoryUtil.memCalloc(VDINode.getDepthBufferSize(windowWidth, windowHeight, numSupersegments) / mpiCommSize)
-        val compositedVDIColor = VDINode.generateColorTexture(windowWidth, windowHeight, numSupersegments, outputColours)
-        val compositedVDIDepth = VDINode.generateDepthTexture(windowWidth, windowHeight, numSupersegments, outputDepths)
-        material().textures["CompositedVDIColor"] = compositedVDIColor
-        material().textures["CompositedVDIDepth"] = compositedVDIDepth
+        val outputColours = MemoryUtil.memCalloc(VDINode.getColorBufferSize(effectiveWidth, windowHeight, numSupersegments))
+        val outputDepths = MemoryUtil.memCalloc(VDINode.getDepthBufferSize(effectiveWidth, windowHeight, numSupersegments))
+        val compositedVDIColor = VDINode.generateColorTexture(effectiveWidth, windowHeight, numSupersegments, outputColours)
+        val compositedVDIDepth = VDINode.generateDepthTexture(effectiveWidth, windowHeight, numSupersegments, outputDepths)
+        material().textures[compositedColorName] = compositedVDIColor
+        material().textures[compositedDepthName] = compositedVDIDepth
 
         metadata["ComputeMetadata"] = ComputeMetadata(
             workSizes = Vector3i(windowWidth/mpiCommSize, windowHeight, 1)
@@ -69,6 +73,11 @@ class VDICompositorNode(windowWidth: Int, windowHeight: Int, numSupersegments: I
         numProcesses = mpiCommSize
 
         isCompact = true
+    }
+
+    companion object {
+        val compositedColorName = "CompositedVDIColor"
+        val compositedDepthName = "CompositedVDIDepth"
     }
 
 }

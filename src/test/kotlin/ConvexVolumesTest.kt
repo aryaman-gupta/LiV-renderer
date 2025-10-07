@@ -1,13 +1,14 @@
 package graphics.scenery.tests
 
 import graphics.scenery.tests.interfaces.ConvexVolumesInterface
+import graphics.scenery.tests.interfaces.VDIGenerationInterface
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
 
 fun main() {
     // Initialize the renderer
-    val instance = ConvexVolumesInterface(1280, 720, 0, 1, 0)
+    val instance = VDIGenerationInterface(1280, 720, 0, 1, 0)
 
     thread {
         instance.main()
@@ -21,7 +22,7 @@ fun main() {
 
     val scaling = instance.getVolumeScaling()
 
-    instance.addProcessorData(0, floatArrayOf(0f, 0f, 0f), floatArrayOf(128f, 128f, 256f))
+//    instance.addProcessorData(0, floatArrayOf(0f, 0f, 0f), floatArrayOf(128f, 128f, 256f))
 
     // Add a volume
     val volumePosition = floatArrayOf(0.0f, 0.0f, 0.0f)

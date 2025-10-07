@@ -24,11 +24,15 @@ dependencies {
     // or version tags from https://github.com/scenerygraphics/scenery/releases
     api("graphics.scenery:scenery:0.9.2")
 
+    implementation("com.esotericsoftware:kryo:5.6.0")
+
     // necessary for logging to work correctly, adjust to the logging
     // framework of your liking
     runtimeOnly("org.slf4j:slf4j-simple:1.7.30")
     testImplementation("org.mockito:mockito-core:4.0.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.8.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
 }
 
 application {
@@ -59,5 +63,12 @@ tasks {
 
     named<Test>("test") {
         useJUnitPlatform()
+    }
+
+    test {
+        testLogging {
+            showStandardStreams = true
+            events("passed", "failed", "skipped")
+        }
     }
 }

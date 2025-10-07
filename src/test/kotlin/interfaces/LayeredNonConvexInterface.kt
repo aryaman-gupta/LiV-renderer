@@ -1,6 +1,5 @@
 package graphics.scenery.tests.interfaces
 
-import graphics.scenery.Camera
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.interfaces.RenderingInterfaceBase
 import graphics.scenery.parallelization.LayeredImagesParallelization
@@ -13,8 +12,8 @@ class LayeredNonConvexInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: 
 
     override var outputProcessingType = OutputProcessingType.SAVE_TO_DISK
 
-    override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
-        return LayeredImagesParallelization(volumeManagerManager, mpiParameters, camera)
+    override fun initializeParallelizationScheme(): ParallelizationBase {
+        return LayeredImagesParallelization(volumeManagerManager, mpiParameters, scene)
     }
 
     override fun setupVolumeManagerManager() {

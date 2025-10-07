@@ -60,5 +60,23 @@ object MPIJavaWrapper {
      * @param root The rank of the broadcast root.
      */
     external fun bcast(data: ByteArray?, root: Int)
+
+    /**
+     * Gathers data from all processes to the root process.
+     * The root process receives an array of byte arrays, each containing the data from one process.
+     *
+     * @param sendbuf The data to send from each process.
+     * @param sendcount The number of elements to send from each process.
+     * @param recvbuf The buffer to receive the gathered data at the root process, or null if not needed.
+     * @param recvcount The number of elements expected from each process at the root.
+     * @param root The rank of the root process that gathers the data.
+     */
+    external fun gather(
+        sendbuf: ByteArray,
+        sendcount: Int,
+        recvbuf: ByteArray?,
+        recvcount: Int,
+        root: Int
+    )
 }
 

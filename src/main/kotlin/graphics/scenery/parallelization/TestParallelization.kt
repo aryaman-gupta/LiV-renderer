@@ -1,12 +1,12 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
+import graphics.scenery.Scene
 import graphics.scenery.VolumeManagerManager
 import java.nio.ByteBuffer
 
-class TestParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera)
-    : ParallelizationBase("test", volumeManagerManager, mpiParameters, camera)
-{
+class TestParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, scene: Scene)
+    : ParallelizationBase( "test", volumeManagerManager, mpiParameters, scene) {
 
     override val twoPassRendering = false
     override val explicitCompositingStep = false
@@ -17,7 +17,7 @@ class TestParallelization(volumeManagerManager: VolumeManagerManager, mpiParamet
             throw IllegalArgumentException("Expected exactly one buffer but got ${buffers.size}")
         }
 
-        finalCompositedBuffers.add(buffers[0])
+        finalBuffers.add(buffers[0])
     }
 
     override fun streamOutput() {

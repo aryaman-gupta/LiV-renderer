@@ -1,6 +1,5 @@
 package graphics.scenery.tests.interfaces
 
-import graphics.scenery.Camera
 import graphics.scenery.VolumeManagerManager
 import graphics.scenery.interfaces.RenderingInterfaceBase
 import graphics.scenery.parallelization.FlatImagesParallelization
@@ -15,13 +14,13 @@ class ConvexVolumesInterface(wWidth: Int, wHeight: Int, rank: Int, commSize: Int
     val processorDimensions = mutableMapOf<Int, Vector3f>()
 
     @Suppress("unused")
-    fun addProcessorData(processorId: Int, origin: FloatArray, dimensions: FloatArray) {
+    override fun addProcessorData(processorId: Int, origin: FloatArray, dimensions: FloatArray) {
         processorOrigins[processorId] = Vector3f(origin[0] * pixelToWorld, origin[1] * -1 * pixelToWorld, origin[2] * pixelToWorld)
         processorDimensions[processorId] = Vector3f(dimensions[0], dimensions[1], dimensions[2])
     }
 
-    override fun initializeParallelizationScheme(camera: Camera): ParallelizationBase {
-        return FlatImagesParallelization("convex", volumeManagerManager, mpiParameters, camera)
+    override fun initializeParallelizationScheme(): ParallelizationBase {
+        return FlatImagesParallelization(volumeManagerManager, mpiParameters, scene)
     }
 
     override fun setupVolumeManagerManager() {

@@ -1,41 +1,74 @@
 package graphics.scenery.parallelization
 
 import graphics.scenery.Camera
+import graphics.scenery.Scene
 import graphics.scenery.VDICompositorNode
 import graphics.scenery.VolumeManagerManager
+import graphics.scenery.natives.VDIMPIWrapper
 import graphics.scenery.textures.Texture
+import graphics.scenery.utils.extensions.applyVulkanCoordinateSystem
+import graphics.scenery.volumes.VolumeManager
+import graphics.scenery.volumes.vdi.VDIBufferSizes
+import graphics.scenery.volumes.vdi.VDIData
+import graphics.scenery.volumes.vdi.VDIDataIO
+import graphics.scenery.volumes.vdi.VDIMetadata
+import graphics.scenery.volumes.vdi.VDINode
+import graphics.scenery.volumes.vdi.modifyFinalBuffersImpl
 import net.imglib2.type.numeric.integer.IntType
+import net.imglib2.type.numeric.integer.UnsignedByteType
+import net.imglib2.type.numeric.integer.UnsignedShortType
 import net.imglib2.type.numeric.real.FloatType
 import org.joml.Matrix4f
+import org.joml.Vector2i
+import org.joml.Vector3f
 import org.joml.Vector3i
 import org.lwjgl.system.MemoryUtil
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime
 import kotlin.math.ceil
 
-class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, camera: Camera)
-    : ParallelizationBase("vdi", volumeManagerManager, mpiParameters, camera) {
+class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager, mpiParameters: MPIParameters, scene: Scene, val volumeDimensions: IntArray, val modelMatrix: Matrix4f)
+    : ParallelizationBase("vdi", volumeManagerManager, mpiParameters, scene) {
 
     override val twoPassRendering = true
 
     override val firstPassFlag = "doThreshSearch"
     override val secondPassFlag = "doGeneration"
 
+    override val explicitCompositingStep = true
+
     private var prefixBuffer: ByteBuffer? = null
     private var totalSupersegmentsGenerated = 0
 
-    override var windowWidth = volumeManagerManager.getVDIVolumeManager().getVDIWidth()
-    override var windowHeight = volumeManagerManager.getVDIVolumeManager().getVDIHeight()
-    val numSupersegments = volumeManagerManager.getVDIVolumeManager().getMaxSupersegments()
+    // Track previously allocated padded buffers for safe deallocation
+    private var prevPaddedColorBuffer: ByteBuffer? = null
+    private var prevPaddedDepthBuffer: ByteBuffer? = null
+
+    override var windowWidth = 0
+        get() = volumeManagerManager.getVDIVolumeManager().getVDIWidth()
+
+    override var windowHeight = 0
+        get() = volumeManagerManager.getVDIVolumeManager().getVDIHeight()
+
+    val numSupersegments get() = volumeManagerManager.getVDIVolumeManager().getMaxSupersegments()
 
     var distributeColorPointer: Long = 0L
     var distributeDepthPointer: Long = 0L
     var distributePrefixPointer: Long = 0L
     var mpiPointer: Long = 0L
 
-    @Suppress("unused")
-    private external fun distributeVDIs(subVDIColor: ByteBuffer, subVDIDepth: ByteBuffer, prefixSums: ByteBuffer, supersegmentCounts: IntArray, commSize: Int,
-                                        colPointer: Long, depthPointer: Long, prefixPointer: Long, mpiPointer: Long)
+    override val compositedColorsTextureName: String = VDICompositorNode.compositedColorName
+    override val compositedDepthsTextureName: String = VDICompositorNode.compositedDepthName
+
+    override val distributedColorsTextureName: String = "VDIsColor"
+    override val distributedDepthsTextureName: String = "VDIsDepth"
+
+    val nativeHandle = VDIMPIWrapper.initializeVDIResources(volumeManagerManager.getVDIVolumeManager().maxColorBufferSize,
+        volumeManagerManager.getVDIVolumeManager().maxDepthBufferSize,
+        volumeManagerManager.getVDIVolumeManager().prefixBufferSize,
+        volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize,
+        volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize)
 
     override fun setupCompositor(): VDICompositorNode {
         return VDICompositorNode(windowWidth, windowHeight, numSupersegments, mpiParameters.commSize)
@@ -83,7 +116,10 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
 
         val rank = mpiParameters.rank
         val commSize = mpiParameters.commSize
+
+        // Calculate supersegment counts
         val supersegmentCounts = IntArray(commSize)
+        val supersegmentCountsRecv = IntArray(commSize)
 
         preProcessBeforeDistribute {
             val prefixIntBuff = prefixBuffer!!.asIntBuffer()
@@ -99,13 +135,122 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
             logger.debug("Rank: $rank will send ${supersegmentCounts[commSize-1]} supersegments to process ${commSize-1}")
         }
 
-        distributeVDIs(colorBuffer, depthBuffer, prefixBuffer!!, supersegmentCounts, commSize, distributeColorPointer,
-            distributeDepthPointer, distributePrefixPointer, mpiPointer)
+        // First distribute supersegmentCounts via MPI
+        val distributedSupersegmentCounts = VDIMPIWrapper.distributeSupersegmentCounts(nativeHandle, supersegmentCounts, commSize)
+
+        // Copy the received counts to our local array
+        for (i in 0 until commSize) {
+            supersegmentCountsRecv[i] = distributedSupersegmentCounts[i]
+        }
+
+        // Calculate color counts and displacements
+        val colorCounts = IntArray(commSize)
+        val colorDisplacements = IntArray(commSize)
+        var colorDisplacementSum = 0
+
+        for (i in 0 until commSize) {
+            colorCounts[i] = supersegmentCounts[i] * 4 * 4
+            colorDisplacements[i] = colorDisplacementSum
+            colorDisplacementSum += colorCounts[i]
+        }
+
+        // Calculate depth counts and displacements
+        val depthCounts = IntArray(commSize)
+        val depthDisplacements = IntArray(commSize)
+        var depthDisplacementSum = 0
+
+        for (i in 0 until commSize) {
+            depthCounts[i] = supersegmentCounts[i] * 4 * 2
+            depthDisplacements[i] = depthDisplacementSum
+            depthDisplacementSum += depthCounts[i]
+        }
+
+        // Calculate receive counts and displacements
+        val colorCountsRecv = IntArray(commSize)
+        val colorDisplacementsRecv = IntArray(commSize)
+        var colorDisplacementRecvSum = 0
+
+        val depthCountsRecv = IntArray(commSize)
+        val depthDisplacementsRecv = IntArray(commSize)
+        var depthDisplacementRecvSum = 0
+
+        for (i in 0 until commSize) {
+            colorCountsRecv[i] = supersegmentCountsRecv[i] * 4 * 4
+            colorDisplacementsRecv[i] = colorDisplacementRecvSum
+            colorDisplacementRecvSum += colorCountsRecv[i]
+
+            depthCountsRecv[i] = supersegmentCountsRecv[i] * 4 * 2
+            depthDisplacementsRecv[i] = depthDisplacementRecvSum
+            depthDisplacementRecvSum += depthCountsRecv[i]
+        }
+
+        // Now perform the MPI_Alltoallv operations for color and depth
+
+        logger.debug("Rank: $rank distributing ${colorCounts.sum()} bytes of color data and ${depthCounts.sum()} bytes of depth data")
+
+        val distributedColors = VDIMPIWrapper.distributeColorVDI(
+            nativeHandle,
+            colorBuffer,
+            colorCounts,
+            colorDisplacements,
+            colorCountsRecv,
+            colorDisplacementsRecv,
+            commSize
+        )
+
+        logger.debug("Rank: $rank received ${distributedColors.remaining() / (4 * 4)} supersegments of color data")
+
+        val distributedDepths = VDIMPIWrapper.distributeDepthVDI(
+            nativeHandle,
+            depthBuffer,
+            depthCounts,
+            depthDisplacements,
+            depthCountsRecv,
+            depthDisplacementsRecv,
+            commSize
+        )
+
+        logger.debug("Rank: $rank received ${distributedDepths.remaining() / (4 * 2)} supersegments of depth data")
+
+        // Distribute prefix buffer
+        val prefixSet = VDIMPIWrapper.distributePrefixVDI(nativeHandle, prefixBuffer!!, mpiParameters.commSize)
+
+        val distributedBuffers = listOf(distributedColors, distributedDepths, prefixSet)
+
+        val camera = scene.findObserver()
+        if (camera == null) {
+            IllegalStateException("Camera not found in scene")
+        }
+
+        uploadForCompositing(distributedBuffers, camera as Camera, supersegmentCountsRecv.map { it * 4 * 4 }.toIntArray())
     }
 
-    override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, colorCounts: IntArray, depthCounts: IntArray) {
+    override fun uploadForCompositing(buffersToUpload: List<ByteBuffer>, camera: Camera, elementCounts: IntArray) {
+        // Free previously allocated padded buffers, if any
+        prevPaddedColorBuffer?.let {
+            MemoryUtil.memFree(it)
+            prevPaddedColorBuffer = null
+        }
+        prevPaddedDepthBuffer?.let {
+            MemoryUtil.memFree(it)
+            prevPaddedDepthBuffer = null
+        }
+
         // Upload data for compositing
         val compositor = compositorNode as VDICompositorNode
+
+        compositor.nw = volumeManagerManager.hub.get<VolumeManager>()!!.shaderProperties.get("nw") as Float
+
+        compositor.ProjectionOriginal = Matrix4f(camera.spatial().projection).applyVulkanCoordinateSystem()
+        compositor.invProjectionOriginal = Matrix4f(camera.spatial().projection).applyVulkanCoordinateSystem().invert()
+
+        compositor.numProcesses = mpiParameters.commSize
+        compositor.vdiWidth = windowWidth
+        compositor.vdiHeight = windowHeight
+        compositor.isCompact = true
+
+        compositor.ViewOriginal = camera.spatial().getTransformation()
+        compositor.invViewOriginal = Matrix4f(camera.spatial().getTransformation()).invert()
 
         if (buffersToUpload.size != 3) {
             Exception("Expected 3 buffers, got ${buffersToUpload.size}").printStackTrace()
@@ -115,19 +260,61 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         val vdiSetDepth = buffersToUpload[1]
         val prefixSet = buffersToUpload[2]
 
-        val supersegmentsRecvd = (vdiSetColour.remaining() / (4*4)).toFloat() //including potential 0 supersegments that were padded
+        val supersegmentsRecvd = (vdiSetColour.remaining() / (4*4)).toFloat()
 
-        logger.debug("Rank: ${mpiParameters.rank}: total supsegs recvd (including 0s): $supersegmentsRecvd")
+        logger.debug("Rank: ${mpiParameters.rank}: total supsegs recvd: $supersegmentsRecvd")
 
         for (i in 0 until mpiParameters.commSize) {
-            compositor.totalSupersegmentsFrom[i] = colorCounts[i] / (4 * 4)
-            logger.debug("Rank ${mpiParameters.rank}: totalSupersegmentsFrom $i: ${colorCounts[i] / (4 * 4)}")
+            compositor.totalSupersegmentsFrom[i] = elementCounts[i] / (4 * 4)
+            logger.info("Rank ${mpiParameters.rank}: totalSupersegmentsFrom $i: ${elementCounts[i] / (4 * 4)}")
         }
 
-        compositor.material().textures["VDIsColor"] = Texture(Vector3i(512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 4, contents = vdiSetColour, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
+        // Pad vdiSetColour if it contains less bytes than required for the texture
+        val requiredColorBytes = 512 * 512 * ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt() * 4 * 4
+        var paddedVdiSetColour = vdiSetColour
+        if (vdiSetColour.remaining() < requiredColorBytes) {
+            val paddedBuffer = ByteBuffer.allocateDirect(requiredColorBytes)
+            val oldLimit = vdiSetColour.limit()
+            vdiSetColour.limit(vdiSetColour.position() + vdiSetColour.remaining())
+            paddedBuffer.put(vdiSetColour)
+            vdiSetColour.rewind()
+            paddedBuffer.position(vdiSetColour.remaining())
+            while (paddedBuffer.position() < requiredColorBytes) {
+                paddedBuffer.put(0)
+            }
+            paddedBuffer.flip()
+            paddedVdiSetColour = paddedBuffer
+            vdiSetColour.limit(oldLimit)
+            prevPaddedColorBuffer = paddedBuffer // Save for next deallocation
+        } else {
+            prevPaddedColorBuffer = null
+        }
+
+        // Pad vdiSetDepth if it contains less bytes than required for the texture
+        val requiredDepthBytes = 2 * 512 * 512 * ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt() * 4
+        var paddedVdiSetDepth = vdiSetDepth
+        if (vdiSetDepth.remaining() < requiredDepthBytes) {
+            val paddedBuffer = ByteBuffer.allocateDirect(requiredDepthBytes)
+            val oldLimit = vdiSetDepth.limit()
+            vdiSetDepth.limit(vdiSetDepth.position() + vdiSetDepth.remaining())
+            paddedBuffer.put(vdiSetDepth)
+            vdiSetDepth.rewind()
+            paddedBuffer.position(vdiSetDepth.remaining())
+            while (paddedBuffer.position() < requiredDepthBytes) {
+                paddedBuffer.put(0)
+            }
+            paddedBuffer.flip()
+            paddedVdiSetDepth = paddedBuffer
+            vdiSetDepth.limit(oldLimit)
+            prevPaddedDepthBuffer = paddedBuffer // Save for next deallocation
+        } else {
+            prevPaddedDepthBuffer = null
+        }
+
+        compositor.material().textures[distributedColorsTextureName] = Texture(Vector3i(512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 4, contents = paddedVdiSetColour, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
             type = FloatType(), mipmap = false, normalized = false, minFilter = Texture.FilteringMode.NearestNeighbour, maxFilter = Texture.FilteringMode.NearestNeighbour)
 
-        compositor.material().textures["VDIsDepth"] = Texture(Vector3i(2 * 512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 1, contents = vdiSetDepth, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
+        compositor.material().textures[distributedDepthsTextureName] = Texture(Vector3i(2 * 512, 512, ceil((supersegmentsRecvd / (512*512)).toDouble()).toInt()), 1, contents = paddedVdiSetDepth, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
             type = FloatType(), mipmap = false, normalized = false, minFilter = Texture.FilteringMode.NearestNeighbour, maxFilter = Texture.FilteringMode.NearestNeighbour)
 
         compositor.material().textures["VDIsPrefix"] = Texture(Vector3i(windowHeight, windowWidth, 1), 1, contents = prefixSet, usageType = hashSetOf(Texture.UsageType.LoadStoreImage, Texture.UsageType.Texture),
@@ -138,6 +325,111 @@ class DistributedVDIsParallelization(volumeManagerManager: VolumeManagerManager,
         compositor.ViewOriginal = view
         compositor.invViewOriginal = Matrix4f(view).invert()
 
+        compositor.visible = true
+
+    }
+
+    override fun gatherCompositedOutput(buffers: List<ByteBuffer>) {
+        val colorBuffer = buffers[0]
+        val depthBuffer = buffers[1]
+        val compositedVDILen = colorBuffer.remaining() / (4 * 4)
+
+        if(colorBuffer.remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize/mpiParameters.commSize) {
+            logger.error("Color buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedColorBufferSize/mpiParameters.commSize}, got ${colorBuffer.remaining()}")
+        }
+
+        if(depthBuffer.remaining() != volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize/mpiParameters.commSize) {
+            logger.error("Depth buffer size mismatch. Expected ${volumeManagerManager.getVDIVolumeManager().uncompressedDepthBufferSize/mpiParameters.commSize}, got ${depthBuffer.remaining()}")
+        }
+
+        val gatheredColors = VDIMPIWrapper.gatherColorVDI(nativeHandle, colorBuffer, colorBuffer.remaining(), rootRank, colorBuffer.remaining() * mpiParameters.commSize)
+        val gatheredDepths = VDIMPIWrapper.gatherDepthVDI(nativeHandle, depthBuffer, depthBuffer.remaining(), rootRank, depthBuffer.remaining() * mpiParameters.commSize)
+
+        if (isRootProcess()) {
+
+            val camera = scene.findObserver()!!
+
+            //first, create and add the VDIMetadata to the final buffers
+            val vdiData = VDIData(
+                VDIBufferSizes(),
+                VDIMetadata(
+                    //TODO: making sure camera properties are consistent throughout VDI generation process
+                    index = frameNumber,
+                    projection = camera.spatial().projection,
+                    view = camera.spatial().getTransformation(),
+                    model = modelMatrix,
+                    volumeDimensions = Vector3f(volumeDimensions[0].toFloat(), volumeDimensions[1].toFloat(), volumeDimensions[2].toFloat()),
+                    windowDimensions = Vector2i(windowWidth, windowHeight),
+                    nw = volumeManagerManager.hub.get<VolumeManager>()!!.shaderProperties.get("nw") as Float
+                )
+            )
+
+            val baos = ByteArrayOutputStream()
+            VDIDataIO.write(vdiData, baos)
+            val vdiMetadataBuffer = ByteBuffer.wrap(baos.toByteArray())
+
+            // add the metadata buffer to the final buffers
+            finalBuffers.add(vdiMetadataBuffer)
+
+            // put the composited colors into the final composited buffer list
+            gatheredColors?.let {
+                finalBuffers.add(it)
+            }
+            gatheredDepths?.let {
+                finalBuffers.add(it)
+            }
+        }
+    }
+
+    private fun correctLinearization(buffer: ByteBuffer, vdiWidth: Int, vdiHeight: Int, numSupersegments: Int, supersegmentResolution: Int) {
+        //the buffers from the individual PEs were incorrectly placed along the z-dimension. We need to instead place
+        //them along the x-dimension
+
+        val separatedBuffers = Array(mpiParameters.commSize) { ByteBuffer.allocateDirect(buffer.remaining() / mpiParameters.commSize) }
+
+        for(i in 0 until mpiParameters.commSize) {
+            val slice = ByteBuffer.allocateDirect(buffer.remaining() / mpiParameters.commSize)
+            val oldLimit = buffer.limit()
+            buffer.limit(buffer.position() + buffer.remaining() / mpiParameters.commSize)
+            slice.put(buffer)
+            slice.flip()
+            separatedBuffers[i] = slice
+            buffer.limit(oldLimit)
+        }
+
+        buffer.rewind()
+
+        val vdiSize = vdiWidth * vdiHeight * numSupersegments * supersegmentResolution
+
+        if(vdiSize != buffer.remaining()) {
+            logger.error("Buffer size mismatch in correctLinearization. Expected $vdiSize, got ${buffer.remaining()}")
+            return
+        }
+
+        for(i in 0 until vdiSize step supersegmentResolution) {
+            //put the element from the correct slice into the buffer
+            val x_ = i % (vdiWidth * supersegmentResolution)
+            val sliceID = x_ / ceil(((vdiWidth.toFloat()) * supersegmentResolution) / mpiParameters.commSize).toInt()
+
+            //get a chunk of size [supersegmentResolution] from the correct slice into the buffer
+            val chunk = ByteArray(supersegmentResolution)
+            separatedBuffers[sliceID].get(chunk)
+            buffer.put(chunk)
+        }
+
+        buffer.rewind()
+    }
+
+    override fun modifyFinalBuffers(buffers: List<ByteBuffer>) {
+        if (isRootProcess()) {
+            modifyFinalBuffersImpl(
+                buffers,
+                mpiParameters,
+                windowWidth,
+                windowHeight,
+                numSupersegments
+            )
+        }
     }
 
     override fun setCompositorActivityStatus(setTo: Boolean) {

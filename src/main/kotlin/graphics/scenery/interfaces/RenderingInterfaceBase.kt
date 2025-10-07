@@ -35,7 +35,8 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
     var volumesCreated = AtomicBoolean(false)
     var sceneSetupComplete = AtomicBoolean(false)
 
-    private var volumeDimensions: IntArray = intArrayOf(0, 0, 0)
+    protected var volumeDimensions: IntArray = intArrayOf(0, 0, 0)
+    private set
 
     protected var pixelToWorld = 0.001f
 
@@ -94,9 +95,9 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             exitProcess(1)
         }
         volumeDimensions = dims
-        volumeDimensionsInitialized.set(true)
 
         pixelToWorld = 3.84f / volumeDimensions[0] // empirically found to work reasonably
+        volumeDimensionsInitialized.set(true)
     }
 
     fun getVolumeScaling(): Float {
@@ -180,9 +181,55 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
         logger.info("Volume $volumeId has been updated")
     }
 
+    open fun addProcessorData(processorId: Int, origin: FloatArray, dimensions: FloatArray) {
+
+    }
+
+    /**
+     * Sets the transfer function for a specific volume.
+     * Useful for predefining the transfer function for a volume instead of setting it later in the UI.
+     *
+     * @param volumeId The ID of the volume to set the transfer function for.
+     * @param transferFunction The transfer function to apply to the volume.
+     */
+    fun setTransferFunction(volumeId: Int, transferFunction: TransferFunction) {
+        if(Settings().get("RemoteCamera", false)) {
+            logger.warn("setTransferFunction is not supported in remote camera mode. Transfer function will not be updated.")
+            return
+        }
+
+        if(!volumes.containsKey(volumeId)) {
+            throw IllegalArgumentException("Volume with ID $volumeId does not exist")
+        }
+        volumes[volumeId]?.transferFunction = transferFunction
+    }
+
+    /**
+     * Sets the camera pose in the scene.
+     * This function can be used to predefine the position and rotation of the camera in the scene, e.g., for benchmarking purposes.
+     *
+     * @param position The position of the camera as a Vector3f.
+     * @param rotation The rotation of the camera as a Quaternionf.
+     */
+    fun setCameraPose(position: Vector3f, rotation: Quaternionf) {
+        if(Settings().get("RemoteCamera", false)) {
+            logger.warn("setCameraPose is not supported in remote camera mode. Camera pose will not be updated.")
+            return
+        }
+
+        while (scene.findObserver() == null) {
+            Thread.sleep(500)
+            logger.info("Waiting for camera to be added to the scene")
+        }
+        val cam: Camera = scene.findObserver() as Camera
+        cam.spatial().position.set(position)
+        cam.spatial().rotation.set(rotation)
+        cam.spatial().needsUpdate = true
+    }
+
     abstract fun setupVolumeManagerManager()
 
-    abstract fun initializeParallelizationScheme(camera: Camera): ParallelizationBase
+    abstract fun initializeParallelizationScheme(): ParallelizationBase
 
     open fun additionalSceneSetup() {}
 
@@ -195,11 +242,11 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
 
         volumeManagerInitialized.set(true)
 
-        val cam: Camera = DetachedHeadCamera()
-
         val benchmarkDataset = System.getProperty("liv-renderer.BenchmarkDataset")
 
+        val cam: Camera
         if (!Settings().get("RemoteCamera", false)) {
+            cam = DetachedHeadCamera()
             if (benchmarkDataset != null) {
                 BenchmarkSetup(Dataset.valueOf(benchmarkDataset)).positionCamera(cam)
             } else {
@@ -215,7 +262,11 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             scene.addChild(cam)
         }
 
-        parallelizationScheme = initializeParallelizationScheme(cam)
+        while (!volumeDimensionsInitialized.get() || !sceneSetupComplete.get()) {
+            Thread.sleep(50)
+        }
+
+        parallelizationScheme = initializeParallelizationScheme()
 
         if (outputProcessingType == OutputProcessingType.DISPLAY) {
             plane = FullscreenObject()
@@ -236,9 +287,19 @@ abstract class RenderingInterfaceBase(applicationName: String, windowWidth: Int,
             Thread.sleep(50)
         }
 
-        renderer!!.runAfterRendering.add { parallelizationScheme.postRender() }
-        renderer!!.runAfterRendering.add { parallelizationScheme.processCompositedOutput() }
-        renderer!!.runAfterRendering.add { parallelizationScheme.synchronizeCamera() }
+        var frameNumber = 0
+
+        renderer!!.runAfterRendering.add { if(frameNumber > 0) { parallelizationScheme.postRender() } }
+        renderer!!.runAfterRendering.add { if(frameNumber > 0) { parallelizationScheme.processCompositedOutput() } }
+        renderer!!.runAfterRendering.add {
+            parallelizationScheme.synchronizeCamera()
+
+            if(frameNumber > 0 && !Settings().get("LiV-Test-Benchmark", false)) {
+                parallelizationScheme.synchronizeTransferFunction(volumes)
+            }
+
+            frameNumber++
+        }
 
         val target = Vector3f(volumeDimensions[0].toFloat(), volumeDimensions[1].toFloat(),
             volumeDimensions[2].toFloat()

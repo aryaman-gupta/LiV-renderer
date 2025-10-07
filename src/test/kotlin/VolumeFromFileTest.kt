@@ -2,6 +2,8 @@ package graphics.scenery.tests
 
 import graphics.scenery.tests.interfaces.ConvexVolumesInterface
 import graphics.scenery.tests.interfaces.NaiveInterface
+import graphics.scenery.tests.interfaces.VDIGenerationInterface
+import graphics.scenery.volumes.TransferFunction
 import java.io.File
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
@@ -17,7 +19,7 @@ fun main(args: Array<String>) {
     val volumeDims = intArrayOf(args[1].toInt(), args[2].toInt(), args[3].toInt())
     val is16bit = args[4].toBoolean()
 
-    val instance = NaiveInterface(1280, 720, 0, 1, 0)
+    val instance = VDIGenerationInterface(512, 512, 0, 1, 0)
 
     thread {
         instance.main()
@@ -48,12 +50,14 @@ fun main(args: Array<String>) {
     // Update the volume
     instance.updateVolume(0, buffer)
 
+//    instance.setTransferFunction(0, TransferFunction.ramp(0.1f, 0.5f))
     instance.sceneSetupComplete.set(true)
 
     // Start the rendering loop
     while (true) {
         // Perform rendering tasks
-        Thread.sleep(10000)
+        Thread.sleep(1000000)
         instance.stopRendering()
     }
 }
+
